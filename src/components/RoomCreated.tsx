@@ -137,7 +137,7 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
         console.error('Polling error:', err);
         setPollingError(true);
       }
-    }, 2000);
+    }, 3000);
 
     return () => {
       active = false;

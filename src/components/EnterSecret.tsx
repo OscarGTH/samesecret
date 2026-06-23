@@ -242,7 +242,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
       } catch (e) {
         console.error('Join status polling error:', e);
       }
-    }, 1500);
+    }, 3000);
 
     return () => {
       active = false;
