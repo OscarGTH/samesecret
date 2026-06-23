@@ -7,6 +7,8 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import { randomUUID } from 'crypto';
 
 interface DBConfig {
   id: string;
@@ -50,7 +52,15 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '16kb' }));
+
+  const apiLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use('/api/', apiLimiter);
   // Enable CORS. Allow multiple origins via ALLOWED_ORIGINS (comma-separated),
   // otherwise fall back to APP_URL or allow all in development.
   const allowedRaw = process.env.ALLOWED_ORIGINS || process.env.APP_URL || '';
@@ -77,11 +87,15 @@ async function startServer() {
       const { question, template, creatorName, creatorSmpA, caseSensitive, ignoreWhitespace, selfDestruct } = req.body;
 
       if (!question || !creatorName || !creatorSmpA) {
-         res.status(400).json({ error: 'Missing required creation fields.' });
-         return;
+        res.status(400).json({ error: 'Missing required creation fields.' });
+        return;
+      }
+      if (typeof creatorSmpA !== 'string' || creatorSmpA.length > 512) {
+        res.status(400).json({ error: 'Invalid SMP key.' });
+        return;
       }
 
-      const id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const id = randomUUID().replace(/-/g, '');
       const accessCode = generateAccessCode();
 
       const newRoom: DBConfig = {
@@ -146,8 +160,13 @@ async function startServer() {
       const { name, joinerSmpB, joinerSmpCB } = req.body;
 
       if (!name || !joinerSmpB || !joinerSmpCB) {
-         res.status(400).json({ error: 'Name, public blinded value (B), and cross-blinded value (CB) are mandatory.' });
-         return;
+        res.status(400).json({ error: 'Name, public blinded value (B), and cross-blinded value (CB) are mandatory.' });
+        return;
+      }
+      if (typeof joinerSmpB !== 'string' || joinerSmpB.length > 512 ||
+          typeof joinerSmpCB !== 'string' || joinerSmpCB.length > 512) {
+        res.status(400).json({ error: 'Invalid SMP key.' });
+        return;
       }
 
       let room = rooms.get(req.params.idOrCode);
@@ -194,6 +213,10 @@ async function startServer() {
 
       if (!creatorSmpCA) {
         res.status(400).json({ error: 'creatorSmpCA is mandatory for finalization.' });
+        return;
+      }
+      if (typeof creatorSmpCA !== 'string' || creatorSmpCA.length > 512) {
+        res.status(400).json({ error: 'Invalid SMP key.' });
         return;
       }
 
@@ -269,7 +292,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, '127.0.0.1', () => {
     console.log(`[samesecret Server] Listening securely on http://localhost:${PORT}`);
   });
 }
