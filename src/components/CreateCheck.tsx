@@ -218,16 +218,16 @@ export default function CreateCheck({ onRoomCreated }: CreateCheckProps) {
       const data = await res.json();
 
       // Store the private key in sessionStorage for later finalization
-      sessionStorage.setItem(`smp_private_key_${data.roomId}`, privateKeyA.toString());
+      sessionStorage.setItem(`smp_private_key_${data.id}`, privateKeyA.toString());
 
       // Store room key for decryption
-      sessionStorage.setItem(`smp_room_key_${data.roomId}`, roomKeyHex);
+      sessionStorage.setItem(`smp_room_key_${data.id}`, roomKeyHex);
 
       // Store in active session list
       try {
         const activeRooms = JSON.parse(sessionStorage.getItem('secret_matcher_active_session_rooms') || '[]');
         activeRooms.push({
-          roomId: data.roomId,
+          roomId: data.id,
           accessCode: data.accessCode,
           question: question.trim(),
           role: 'creator',
@@ -239,7 +239,7 @@ export default function CreateCheck({ onRoomCreated }: CreateCheckProps) {
         console.error('Failed to store active room:', e);
       }
 
-      onRoomCreated(data.roomId, data.accessCode, question.trim(), template, roomKeyHex);
+      onRoomCreated(data.id, data.accessCode, question.trim(), template, roomKeyHex);
     } catch (err: any) {
       setErrorMsg(err.message || 'An unexpected error occurred.');
       setIsSubmitting(false);

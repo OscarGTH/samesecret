@@ -10,7 +10,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 
-interface DBConfig {
+export interface DBConfig {
   id: string;
   accessCode: string;
   question: string;
@@ -29,29 +29,22 @@ interface DBConfig {
   templateConfig?: Record<string, any>;
 }
 
-// In-memory highly volatile secure key-value store
-const rooms = new Map<string, DBConfig>();
-
-// Helper to generate a unique random uppercase 6-character access code
-function generateAccessCode(): string {
+function generateAccessCode(rooms: Map<string, DBConfig>): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No confusing 0, O, 1, I
   let code = '';
-  // Avoid code collision
   for (let attempt = 0; attempt < 100; attempt++) {
     code = '';
     for (let i = 0; i < 6; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    // Check if code is already active
     const exists = Array.from(rooms.values()).some((r) => r.accessCode === code && r.status === 'waiting');
     if (!exists) break;
   }
   return code;
 }
 
-async function startServer() {
+export function createApp(rooms: Map<string, DBConfig> = new Map()) {
   const app = express();
-  const PORT = 3000;
 
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '16kb' }));
@@ -63,25 +56,13 @@ async function startServer() {
     legacyHeaders: false,
   });
   app.use('/api/', apiLimiter);
-  // Enable CORS. Allow multiple origins via ALLOWED_ORIGINS (comma-separated),
-  // otherwise fall back to APP_URL or allow all in development.
+
   const allowedRaw = process.env.ALLOWED_ORIGINS || process.env.APP_URL || '';
   const allowedOrigins = allowedRaw.split(',').map(s => s.trim()).filter(Boolean);
   const corsOptions = allowedOrigins.length > 0
     ? { origin: (origin: string | undefined) => !origin || allowedOrigins.includes(origin) }
     : { origin: true };
   app.use(cors(corsOptions));
-
-  // Clean obsolete rooms (after 24 hours) every 15 minutes
-  setInterval(() => {
-    const now = Date.now();
-    const expiry = 24 * 60 * 60 * 1000; // 24 hours
-    for (const [roomId, room] of rooms.entries()) {
-      if (now - room.createdAt > expiry) {
-        rooms.delete(roomId);
-      }
-    }
-  }, 15 * 60 * 1000);
 
   // 1. Create a secure Room
   app.post('/api/rooms', (req, res) => {
@@ -98,7 +79,7 @@ async function startServer() {
       }
 
       const id = randomUUID().replace(/-/g, '');
-      const accessCode = generateAccessCode();
+      const accessCode = generateAccessCode(rooms);
 
       const newRoom: DBConfig = {
         id,
@@ -126,15 +107,14 @@ async function startServer() {
   app.get('/api/rooms/:idOrCode', (req, res) => {
     try {
       const param = req.params.idOrCode.toUpperCase();
-      // Match by room ID or access code
       let room = rooms.get(req.params.idOrCode);
       if (!room) {
         room = Array.from(rooms.values()).find((r) => r.accessCode === param);
       }
 
       if (!room) {
-         res.status(404).json({ error: 'Secret Check Room not found or has expired.' });
-         return;
+        res.status(404).json({ error: 'Secret Check Room not found or has expired.' });
+        return;
       }
 
       res.json({
@@ -148,7 +128,7 @@ async function startServer() {
         status: room.status,
         creatorName: room.creatorName,
         joinerName: room.joinerName,
-        creatorSmpA: room.creatorSmpA, // Send A so joiner can cross-blind it
+        creatorSmpA: room.creatorSmpA,
         joinerSmpB: room.joinerSmpB,
         templateConfig: room.templateConfig,
       });
@@ -179,13 +159,13 @@ async function startServer() {
       }
 
       if (!room) {
-         res.status(404).json({ error: 'Secret Check Room not found or has expired.' });
-         return;
+        res.status(404).json({ error: 'Secret Check Room not found or has expired.' });
+        return;
       }
 
       if (room.status !== 'waiting') {
-         res.status(400).json({ error: `This Check Room has already ended or is processing. Status: ${room.status}` });
-         return;
+        res.status(400).json({ error: `This Check Room has already ended or is processing. Status: ${room.status}` });
+        return;
       }
 
       room.status = 'joiner_submitted';
@@ -225,17 +205,15 @@ async function startServer() {
       }
 
       room.creatorSmpCA = creatorSmpCA;
-      
-      // Perform SMP final match evaluation!
-      // CA (H_B ^ ba) is compared to CB (H_A ^ ab).
-      // Under Socialist Millionaire, if H_A === H_B, they are mathematically identical.
+
+      // CA = B^a = (H_B^b)^a = H_B^(ab); CB = A^b = (H_A^a)^b = H_A^(ab)
+      // They are equal iff H_A === H_B, i.e. secrets match.
       const isMatch = room.joinerSmpCB === creatorSmpCA;
 
       room.status = isMatch ? 'matched' : 'no_match';
 
       res.json({ success: true, match: isMatch });
 
-      // If selfDestruct is flagged, wait 10 seconds then delete room
       if (room.selfDestruct) {
         const roomId = room.id;
         setTimeout(() => {
@@ -252,15 +230,15 @@ async function startServer() {
     try {
       const room = rooms.get(req.params.roomId);
       if (!room) {
-         res.status(404).json({ error: 'Secret Check Session expired or self-destructed.' });
-         return;
+        res.status(404).json({ error: 'Secret Check Session expired or self-destructed.' });
+        return;
       }
 
       res.json({
         status: room.status,
         creatorName: room.creatorName,
         joinerName: room.joinerName,
-        joinerSmpB: room.joinerSmpB, // Send B back to Creator so she can compute CA
+        joinerSmpB: room.joinerSmpB,
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -281,7 +259,25 @@ async function startServer() {
     }
   });
 
-  // Vite Integration & Static Assets
+  return app;
+}
+
+async function startServer() {
+  const rooms = new Map<string, DBConfig>();
+  const app = createApp(rooms);
+  const PORT = 3000;
+
+  // Clean obsolete rooms (after 24 hours) every 15 minutes
+  setInterval(() => {
+    const now = Date.now();
+    const expiry = 24 * 60 * 60 * 1000;
+    for (const [roomId, room] of rooms.entries()) {
+      if (now - room.createdAt > expiry) {
+        rooms.delete(roomId);
+      }
+    }
+  }, 15 * 60 * 1000);
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
