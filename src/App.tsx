@@ -194,7 +194,7 @@ export default function App() {
       <Navbar onNavigate={handleNavigate} currentView={view} />
 
       {/* Main Container Stage */}
-      <main className="flex-grow max-w-6xl mx-auto w-full px-6 py-10 md:py-16">
+      <main className="flex-grow max-w-6xl mx-auto w-full px-4 md:px-6 py-4 md:py-16">
         {view === 'home' && (
           <HeroSection onAction={handleNavigate} onRejoinRoom={handleRejoinRoom} />
         )}

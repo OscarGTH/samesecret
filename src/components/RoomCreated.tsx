@@ -165,7 +165,7 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
   };
 
   return (
-    <div className="max-w-md mx-auto space-y-8 animate-fade-in text-center my-6">
+    <div className="max-w-md mx-auto space-y-4 md:space-y-8 animate-fade-in text-center my-2 md:my-6">
       {/* Title block */}
       <div className="space-y-2">
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 mb-2 shadow-inner">

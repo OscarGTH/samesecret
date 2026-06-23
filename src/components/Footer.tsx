@@ -12,7 +12,7 @@ interface FooterProps {
 
 export default function Footer({ onNavigate }: FooterProps) {
   return (
-    <footer className="mt-20 pb-24 md:pb-10 border-t border-white/5 bg-[#0C0C0C]/50 pt-10 px-6">
+    <footer className="mt-6 md:mt-16 pb-20 md:pb-8 border-t border-white/5 bg-[#0C0C0C]/50 pt-5 md:pt-8 px-6">
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
         <div 
           onClick={() => onNavigate('home')}

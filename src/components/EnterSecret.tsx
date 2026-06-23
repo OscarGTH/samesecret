@@ -340,7 +340,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
 
   if (isWaitingForFinalize) {
     return (
-      <div className="max-w-md mx-auto items-center justify-center space-y-6 animate-fade-in text-center my-12">
+      <div className="max-w-md mx-auto items-center justify-center space-y-4 animate-fade-in text-center my-2 md:my-12">
         <div className="glass-card p-8 rounded-sm shadow-2xl relative text-left border border-white/5 bg-[#0C0C0C]/50">
           <div className="text-center space-y-4">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 shadow-inner">
@@ -381,7 +381,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in text-left my-6">
+    <div className="max-w-2xl mx-auto space-y-4 animate-fade-in text-left my-2 md:my-6">
       {/* Creator's Question Card holds either decrypting, error/action form, or clear text */}
       {isDecrypting ? (
         <section className="glass-card rounded-sm p-6 relative overflow-hidden border-l-4 border-l-[#D4AF37] shadow-sm border-white/5 bg-[#0C0C0C]/50 flex items-center gap-3">

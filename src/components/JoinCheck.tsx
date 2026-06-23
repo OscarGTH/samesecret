@@ -120,7 +120,7 @@ export default function JoinCheck({ onRoomSelected, onHome, initialCode = '' }: 
   };
 
   return (
-    <div className="max-w-md mx-auto items-center justify-center space-y-6 animate-fade-in text-center my-6">
+    <div className="max-w-md mx-auto items-center justify-center space-y-4 animate-fade-in text-center my-2 md:my-6">
       {/* Container header card */}
       <div className="glass-card p-6 rounded-sm shadow-2xl relative text-left border border-white/5">
         <div className="text-center mb-6">

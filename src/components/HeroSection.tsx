@@ -34,9 +34,9 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
     }
   }, []);
   return (
-    <section className="space-y-16 animate-fade-in hero-gradient">
+    <section className="space-y-8 md:space-y-16 animate-fade-in hero-gradient">
         {/* Upper Hero Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center pt-8 md:pt-16">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center pt-3 md:pt-16">
         <div className="lg:col-span-7 flex flex-col gap-6 text-left">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 rounded-sm w-fit">
             <ShieldCheck className="w-4 h-4" />
@@ -126,8 +126,8 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
       </div>
 
       {/* Feature Bento Grid */}
-      <div className="py-8 text-left">
-        <h3 className="font-heading italic text-white text-xl mb-8 border-b border-white/5 pb-2">
+      <div className="py-4 md:py-8 text-left">
+        <h3 className="font-heading italic text-white text-xl mb-4 md:mb-8 border-b border-white/5 pb-2">
           The Protocol Design
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -33,10 +33,10 @@ export default function MatchResult({ status, partnerName = 'Anonymous Matcher',
 
   if (status === 'matched') {
     return (
-      <div className="max-w-md mx-auto space-y-6 animate-fade-in text-center my-6">
-        
+      <div className="max-w-md mx-auto space-y-4 animate-fade-in text-center my-2 md:my-6">
+
         {/* Animated Check Visual block */}
-        <div className="relative flex items-center justify-center py-6">
+        <div className="relative flex items-center justify-center py-3 md:py-6">
           <div className="absolute w-40 h-40 bg-[#D4AF37]/10 rounded-full animate-ping opacity-30"></div>
           <div className="relative z-10 w-24 h-24 rounded-full bg-[#0C0C0C] border-2 border-[#D4AF37]/30 flex items-center justify-center shadow-2xl transition-transform hover:scale-105 duration-300">
             <Check className="w-10 h-10 text-[#D4AF37] stroke-[3px]" />
@@ -79,7 +79,7 @@ export default function MatchResult({ status, partnerName = 'Anonymous Matcher',
         </div>
 
         {/* Action CTAs */}
-        <div className="w-full flex flex-col gap-3 pt-3">
+        <div className="w-full flex flex-col gap-3 pt-1">
           <button
             onClick={onHome}
             className="w-full h-11 bg-[#D4AF37] border border-[#D4AF37] text-black hover:bg-transparent hover:text-[#D4AF37] hover:border-[#D4AF37]/40 rounded-sm font-heading font-semibold text-xs tracking-wider uppercase transition-all duration-200 cursor-pointer"
@@ -100,10 +100,10 @@ export default function MatchResult({ status, partnerName = 'Anonymous Matcher',
 
   // Mismatch Result block
   return (
-    <div className="max-w-md mx-auto space-y-6 animate-fade-in text-center my-6">
-      
+    <div className="max-w-md mx-auto space-y-4 animate-fade-in text-center my-2 md:my-6">
+
       {/* Animated Red Warning visual block */}
-      <div className="relative flex items-center justify-center py-6">
+      <div className="relative flex items-center justify-center py-3 md:py-6">
         <div className="absolute w-40 h-40 bg-red-500/5 rounded-full animate-ping opacity-25"></div>
         <div className="relative z-10 w-24 h-24 rounded-full bg-black/40 border-2 border-red-500/20 flex items-center justify-center shadow-2xl transition-transform hover:scale-105 duration-300">
           <X className="w-10 h-10 text-red-400 stroke-[3px]" />
@@ -140,7 +140,7 @@ export default function MatchResult({ status, partnerName = 'Anonymous Matcher',
       </div>
 
       {/* Try again inputs or escape */}
-      <div className="flex gap-4 pt-3">
+      <div className="flex gap-4 pt-1">
         <button
           onClick={onRestart}
           className="flex-grow h-11 bg-[#D4AF37] border border-[#D4AF37] text-black hover:bg-transparent hover:text-[#D4AF37] hover:border-[#D4AF37]/40 rounded-sm font-heading font-semibold text-xs tracking-wider uppercase flex items-center justify-center gap-2 transition-all cursor-pointer"
