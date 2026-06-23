@@ -65,22 +65,33 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
     }
   }, [inviteUrl]);
 
-  // Status Polling Loop
+  // Status Polling Loop with exponential backoff on errors/rate-limits
   useEffect(() => {
     if (!roomId) return;
     let active = true;
     let isFinalizing = false;
-    const interval = setInterval(async () => {
+    let backoffMs = 3000;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const scheduleNext = () => {
+      if (active) timeoutId = setTimeout(poll, backoffMs);
+    };
+
+    const poll = async () => {
       try {
         const res = await fetch(api(`/api/rooms/${roomId}/status`));
         if (!res.ok) {
+          if (res.status === 429) {
+            backoffMs = Math.min(backoffMs * 2, 20000);
+          }
           throw new Error('Lost connection to Check Room');
         }
-        
-        const data = await res.json();
 
         if (!active) return;
+        backoffMs = 3000;
         setPollingError(false);
+
+        const data = await res.json();
 
         if (data.status === 'joiner_submitted' && !isFinalizing) {
           isFinalizing = true;
@@ -91,7 +102,6 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
               const B = BigInt(data.joinerSmpB);
               const C_A = modPow(B, a, P);
 
-              // Dispatch the final CA to finalize the handshake!
               const finalizeRes = await fetch(api(`/api/rooms/${roomId}/finalize`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -107,7 +117,6 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
             isFinalizing = false;
           }
         } else if (data.status === 'matched') {
-          clearInterval(interval);
           let decryptedJoinerName = data.joinerName || 'Joiner';
           const savedKey = sessionStorage.getItem(`smp_room_key_${roomId}`);
           if (savedKey && decryptedJoinerName) {
@@ -125,23 +134,23 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
               console.error('Failed to decrypt joinerName on match:', errDecrypt);
             }
           }
-          onMatchFinished('matched', decryptedJoinerName);
+          return onMatchFinished('matched', decryptedJoinerName);
         } else if (data.status === 'no_match') {
-          clearInterval(interval);
-          onMatchFinished('no_match');
+          return onMatchFinished('no_match');
         } else if (data.status === 'cancelled') {
-          clearInterval(interval);
-          onMatchFinished('cancelled');
+          return onMatchFinished('cancelled');
         }
       } catch (err) {
         console.error('Polling error:', err);
         setPollingError(true);
       }
-    }, 3000);
+      scheduleNext();
+    };
 
+    scheduleNext();
     return () => {
       active = false;
-      clearInterval(interval);
+      clearTimeout(timeoutId);
     };
   }, [roomId, accessCode, question]);
 

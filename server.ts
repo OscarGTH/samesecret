@@ -49,20 +49,21 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '16kb' }));
 
+  // CORS must be registered before the rate limiter so 429 responses still carry the header
+  const allowedRaw = process.env.ALLOWED_ORIGINS || process.env.APP_URL || '';
+  const allowedOrigins = allowedRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const corsOptions = allowedOrigins.length > 0
+    ? { origin: (origin: string | undefined) => !origin || allowedOrigins.includes(origin), maxAge: 86400 }
+    : { origin: true, maxAge: 86400 };
+  app.use(cors(corsOptions));
+
   const apiLimiter = rateLimit({
     windowMs: 60_000,
-    max: 30,
+    max: 120,
     standardHeaders: true,
     legacyHeaders: false,
   });
   app.use('/api/', apiLimiter);
-
-  const allowedRaw = process.env.ALLOWED_ORIGINS || process.env.APP_URL || '';
-  const allowedOrigins = allowedRaw.split(',').map(s => s.trim()).filter(Boolean);
-  const corsOptions = allowedOrigins.length > 0
-    ? { origin: (origin: string | undefined) => !origin || allowedOrigins.includes(origin) }
-    : { origin: true };
-  app.use(cors(corsOptions));
 
   // 1. Create a secure Room
   app.post('/api/rooms', (req, res) => {

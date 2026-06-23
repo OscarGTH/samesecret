@@ -198,22 +198,33 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
     }
   }, [secret, personFields, room]);
 
-  // Poll for handshake outcome
+  // Poll for handshake outcome with exponential backoff on errors/rate-limits
   useEffect(() => {
     if (!isWaitingForFinalize || !room?.id) return;
 
     let active = true;
-    const interval = setInterval(async () => {
+    let backoffMs = 3000;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const scheduleNext = () => {
+      if (active) timeoutId = setTimeout(poll, backoffMs);
+    };
+
+    const poll = async () => {
       try {
         const res = await fetch(api(`/api/rooms/${room.id}/status`));
         if (!res.ok) {
+          if (res.status === 429) {
+            backoffMs = Math.min(backoffMs * 2, 20000);
+          }
           throw new Error('Lost connection to pairing session');
         }
-        const data = await res.json();
         if (!active) return;
+        backoffMs = 3000;
+
+        const data = await res.json();
 
         if (data.status === 'matched') {
-          clearInterval(interval);
           let decryptedCreatorName = data.creatorName || room.creatorName || 'Creator';
           const savedKey = sessionStorage.getItem(`smp_room_key_${room.id}`);
           if (savedKey) {
@@ -231,22 +242,22 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
               console.error('Failed to decrypt creator name on matched:', errDecrypt);
             }
           }
-          onJoinComplete('matched', decryptedCreatorName);
+          return onJoinComplete('matched', decryptedCreatorName);
         } else if (data.status === 'no_match') {
-          clearInterval(interval);
-          onJoinComplete('no_match');
+          return onJoinComplete('no_match');
         } else if (data.status === 'cancelled') {
-          clearInterval(interval);
-          onJoinComplete('cancelled');
+          return onJoinComplete('cancelled');
         }
       } catch (e) {
         console.error('Join status polling error:', e);
       }
-    }, 3000);
+      scheduleNext();
+    };
 
+    scheduleNext();
     return () => {
       active = false;
-      clearInterval(interval);
+      clearTimeout(timeoutId);
     };
   }, [isWaitingForFinalize, room, onJoinComplete]);
 
