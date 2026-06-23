@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  MessagesSquare, 
-  Fingerprint, 
-  Eye, 
-  Lock, 
-  Sparkles, 
+import {
+  MessagesSquare,
+  Fingerprint,
+  Eye,
+  Lock,
+  Sparkles,
   AlertCircle,
+  CheckCircle,
   HelpCircle,
   KeyRound,
   RefreshCw
@@ -33,7 +34,36 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
   const [normalizedPreview, setNormalizedPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Person template structured fields
+  const personConfig = room.templateConfig?.personFields;
+  const [personFields, setPersonFields] = useState({
+    includeFirstName: personConfig?.includeFirstName ?? true,
+    includeLastName: personConfig?.includeLastName ?? true,
+    firstName: '',
+    lastName: '',
+  });
+
+  // Email validation
+  const [emailValid, setEmailValid] = useState(true);
   const [isWaitingForFinalize, setIsWaitingForFinalize] = useState(false);
+
+  function getPersonNamePreview() {
+    const parts = [];
+    if (personFields.includeFirstName && personFields.firstName) parts.push(personFields.firstName);
+    if (personFields.includeLastName && personFields.lastName) parts.push(personFields.lastName);
+    return parts.join(' ') || '';
+  }
+
+  function validateEmail(email: string) {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    setEmailValid(regex.test(email));
+  }
+
+  function getSecretValue() {
+    if (room.template === 'Person') return getPersonNamePreview();
+    return secret;
+  }
 
   // States for client-side decryption of the question
   const [decryptedQuestion, setDecryptedQuestion] = useState<string>('');
@@ -159,18 +189,14 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
 
   // Watch for text updates and dynamically display normalized result
   useEffect(() => {
-    if (!secret.trim()) {
+    const secretValue = getSecretValue();
+    if (!secretValue.trim()) {
       setNormalizedPreview('');
     } else {
-      const result = normalizeSecret(
-        secret, 
-        room.template, 
-        room.caseSensitive, 
-        room.ignoreWhitespace
-      );
+      const result = normalizeSecret(secretValue, room.template, room.caseSensitive, room.ignoreWhitespace);
       setNormalizedPreview(result);
     }
-  }, [secret, room]);
+  }, [secret, personFields, room]);
 
   // Poll for handshake outcome
   useEffect(() => {
@@ -232,8 +258,20 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
       setErrorMsg('Please specify your Display Name.');
       return;
     }
-    if (!secret.trim()) {
+
+    const finalSecret = getSecretValue();
+    if (!finalSecret.trim()) {
       setErrorMsg('Please provide your secret value to check.');
+      return;
+    }
+
+    if (room.template === 'Email' && !emailValid) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    if (room.template === 'Person' && !personFields.includeFirstName && !personFields.includeLastName) {
+      setErrorMsg('Please include at least one name field (first name or last name).');
       return;
     }
 
@@ -242,9 +280,9 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
     try {
       // 1. Perform local cryptography block before transport
       const finalNormalizedVal = normalizeSecret(
-        secret, 
-        room.template, 
-        room.caseSensitive, 
+        finalSecret,
+        room.template,
+        room.caseSensitive,
         room.ignoreWhitespace
       );
       
@@ -467,35 +505,174 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
           </div>
         </div>
 
-        {/* Enter secret */}
+        {/* Enter secret — template-specific inputs */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[#D4AF37]">
-            <label className="block text-[10px] font-bold uppercase tracking-widest" htmlFor="secret">
+            <label className="block text-[10px] font-bold uppercase tracking-widest">
               Your Secret
             </label>
             <span className="text-[9px] text-white/40 font-bold whitespace-nowrap uppercase tracking-wider">
-              Format Rule: {room.template} name
+              Template: {room.template}
             </span>
           </div>
-          
-          <div className="relative group">
-            <input 
-              type="text" 
-              id="secret"
-              value={secret}
-              disabled={decryptionError || isDecrypting}
-              onChange={(e) => setSecret(e.target.value)}
-              placeholder="Enter the name/answer here..."
-              autoComplete="off"
-              className="w-full h-11 pl-4 pr-10 bg-[#080808]/90 border border-zinc-600 hover:border-zinc-400 focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/40 outline-none text-sm font-sans text-white placeholder-white/30 transition-all rounded-sm shadow-md disabled:opacity-20"
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center text-[#D4AF37]/50 group-focus-within:opacity-100 transition-opacity">
-              <Fingerprint className="w-4 h-4" />
+
+          {/* Person Name Template */}
+          {room.template === 'Person' && (
+            <div className="space-y-3 p-4 bg-white/[0.02] rounded-sm border border-white/10">
+              {personConfig?.formatHint && (
+                <p className="text-xs text-white/50">
+                  Creator's format: <span className="text-[#D4AF37] font-semibold">{personConfig.formatHint}</span>
+                </p>
+              )}
+              {!personConfig && (
+                <p className="text-xs text-white/50">Select which name parts to include:</p>
+              )}
+
+              {/* First Name */}
+              <div>
+                <label className="flex items-center gap-2 text-xs text-white/70 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={personFields.includeFirstName}
+                    disabled={personConfig != null}
+                    onChange={(e) => setPersonFields({ ...personFields, includeFirstName: e.target.checked })}
+                    className="rounded border-white/20 bg-black/40 text-[#D4AF37] focus:ring-[#D4AF37] disabled:opacity-50"
+                  />
+                  Include First Name
+                </label>
+                {personFields.includeFirstName && (
+                  <input
+                    type="text"
+                    value={personFields.firstName}
+                    disabled={decryptionError || isDecrypting}
+                    onChange={(e) => setPersonFields({ ...personFields, firstName: e.target.value })}
+                    placeholder="e.g., John"
+                    autoComplete="off"
+                    className="w-full h-10 px-3 bg-[#080808]/90 border border-zinc-600 hover:border-zinc-400 focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/40 outline-none text-sm text-white placeholder-white/30 rounded-sm transition-all disabled:opacity-20"
+                  />
+                )}
+              </div>
+
+              {/* Last Name */}
+              <div>
+                <label className="flex items-center gap-2 text-xs text-white/70 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={personFields.includeLastName}
+                    disabled={personConfig != null}
+                    onChange={(e) => setPersonFields({ ...personFields, includeLastName: e.target.checked })}
+                    className="rounded border-white/20 bg-black/40 text-[#D4AF37] focus:ring-[#D4AF37] disabled:opacity-50"
+                  />
+                  Include Last Name
+                </label>
+                {personFields.includeLastName && (
+                  <input
+                    type="text"
+                    value={personFields.lastName}
+                    disabled={decryptionError || isDecrypting}
+                    onChange={(e) => setPersonFields({ ...personFields, lastName: e.target.value })}
+                    placeholder="e.g., Smith"
+                    autoComplete="off"
+                    className="w-full h-10 px-3 bg-[#080808]/90 border border-zinc-600 hover:border-zinc-400 focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/40 outline-none text-sm text-white placeholder-white/30 rounded-sm transition-all disabled:opacity-20"
+                  />
+                )}
+              </div>
+
+              {(personFields.firstName || personFields.lastName) && (
+                <div className="pt-3 border-t border-white/10">
+                  <p className="text-[10px] text-white/40 mb-1">Preview:</p>
+                  <p className="text-sm font-mono text-[#D4AF37]">{getPersonNamePreview() || '(empty)'}</p>
+                </div>
+              )}
             </div>
-          </div>
-          
+          )}
+
+          {/* Number Template */}
+          {room.template === 'Number' && (
+            <div className="space-y-1">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={secret}
+                disabled={decryptionError || isDecrypting}
+                onChange={(e) => setSecret(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="e.g., 125000"
+                autoComplete="off"
+                className="w-full h-11 px-4 bg-[#080808]/90 border border-zinc-600 hover:border-zinc-400 focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/40 outline-none text-sm font-mono text-white placeholder-white/30 transition-all rounded-sm shadow-md disabled:opacity-20"
+              />
+              <p className="text-[10px] text-white/40">Only numbers allowed (no commas, spaces, or symbols)</p>
+            </div>
+          )}
+
+          {/* Email Template */}
+          {room.template === 'Email' && (
+            <div className="space-y-1">
+              <input
+                type="email"
+                value={secret}
+                disabled={decryptionError || isDecrypting}
+                onChange={(e) => {
+                  const email = e.target.value.toLowerCase().trim();
+                  setSecret(email);
+                  validateEmail(email);
+                }}
+                placeholder="e.g., john.smith@company.com"
+                autoComplete="off"
+                className={`w-full h-11 px-4 bg-[#080808]/90 border ${
+                  secret && emailValid ? 'border-green-600' : 'border-zinc-600'
+                } hover:border-zinc-400 focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/40 outline-none text-sm text-white placeholder-white/30 transition-all rounded-sm shadow-md disabled:opacity-20`}
+              />
+              {secret && !emailValid && (
+                <p className="text-xs text-red-400 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Please enter a valid email address
+                </p>
+              )}
+              {secret && emailValid && (
+                <p className="text-xs text-green-400 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  Valid email format
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Date Template */}
+          {room.template === 'Date' && (
+            <div className="space-y-1">
+              <input
+                type="date"
+                value={secret}
+                disabled={decryptionError || isDecrypting}
+                onChange={(e) => setSecret(e.target.value)}
+                className="w-full h-11 px-4 bg-[#080808]/90 border border-zinc-600 hover:border-zinc-400 focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/40 outline-none text-sm text-white rounded-sm shadow-md transition-all disabled:opacity-20"
+              />
+              <p className="text-[10px] text-white/40">Format: YYYY-MM-DD (standardized automatically)</p>
+            </div>
+          )}
+
+          {/* Project & Custom Templates */}
+          {(room.template === 'Project' || room.template === 'Custom') && (
+            <div className="relative group">
+              <input
+                type="text"
+                id="secret"
+                value={secret}
+                disabled={decryptionError || isDecrypting}
+                onChange={(e) => setSecret(e.target.value)}
+                placeholder="Enter the name/answer here..."
+                autoComplete="off"
+                className="w-full h-11 pl-4 pr-10 bg-[#080808]/90 border border-zinc-600 hover:border-zinc-400 focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/40 outline-none text-sm font-sans text-white placeholder-white/30 transition-all rounded-sm shadow-md disabled:opacity-20"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center text-[#D4AF37]/50 group-focus-within:opacity-100 transition-opacity">
+                <Fingerprint className="w-4 h-4" />
+              </div>
+            </div>
+          )}
+
           <p className="text-[10px] text-white/30 font-medium italic pl-1">
-            Template: {room.template} (Case: {room.caseSensitive ? 'Sensitive' : 'Insensitive'}, White-space: {room.ignoreWhitespace ? 'Ignored' : 'Strict'})
+            Case: {room.caseSensitive ? 'Sensitive' : 'Insensitive'}, White-space: {room.ignoreWhitespace ? 'Ignored' : 'Strict'}
           </p>
         </div>
 

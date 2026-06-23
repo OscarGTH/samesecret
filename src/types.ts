@@ -15,6 +15,12 @@ export interface RoomConfig {
   selfDestruct: boolean;
 }
 
+export interface PersonTemplateConfig {
+  includeFirstName: boolean;
+  includeLastName: boolean;
+  formatHint: string;
+}
+
 export interface RoomState {
   id: string;
   accessCode: string;
@@ -30,4 +36,7 @@ export interface RoomState {
   joinerSmpB?: string;
   joinerSmpCB?: string;
   creatorSmpCA?: string;
+  templateConfig?: {
+    personFields?: PersonTemplateConfig;
+  };
 }

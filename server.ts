@@ -26,6 +26,7 @@ interface DBConfig {
   createdAt: number;
   status: 'waiting' | 'joiner_submitted' | 'matched' | 'no_match' | 'cancelled';
   joinerName?: string;
+  templateConfig?: Record<string, any>;
 }
 
 // In-memory highly volatile secure key-value store
@@ -85,7 +86,7 @@ async function startServer() {
   // 1. Create a secure Room
   app.post('/api/rooms', (req, res) => {
     try {
-      const { question, template, creatorName, creatorSmpA, caseSensitive, ignoreWhitespace, selfDestruct } = req.body;
+      const { question, template, creatorName, creatorSmpA, caseSensitive, ignoreWhitespace, selfDestruct, templateConfig } = req.body;
 
       if (!question || !creatorName || !creatorSmpA) {
         res.status(400).json({ error: 'Missing required creation fields.' });
@@ -111,6 +112,7 @@ async function startServer() {
         selfDestruct: !!selfDestruct,
         createdAt: Date.now(),
         status: 'waiting',
+        templateConfig: templateConfig || undefined,
       };
 
       rooms.set(id, newRoom);
@@ -148,6 +150,7 @@ async function startServer() {
         joinerName: room.joinerName,
         creatorSmpA: room.creatorSmpA, // Send A so joiner can cross-blind it
         joinerSmpB: room.joinerSmpB,
+        templateConfig: room.templateConfig,
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
