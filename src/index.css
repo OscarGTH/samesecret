@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-heading: "Playfair Display", serif;
+}
+
+@layer utilities {
+  .hero-gradient {
+    background: radial-gradient(circle at top right, rgba(214, 175, 55, 0.06), transparent 70%),
+                radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.02), transparent 70%);
+  }
+
+  .glass-card {
+    background: rgba(12, 12, 12, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  }
+
+  .qr-pattern {
+    background-image: radial-gradient(rgba(214, 175, 55, 0.15) 1px, transparent 1px);
+    background-size: 10px 10px;
+  }
+
+  .custom-pattern {
+    background-image: radial-gradient(rgba(214, 175, 55, 0.05) 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
+    opacity: 0.15;
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.95); }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Base custom interactive scrollbar indicators */
+.template-scroll::-webkit-scrollbar {
+  display: none;
+}
+.template-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

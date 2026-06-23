@@ -1,0 +1,5 @@
+{
+  "name": "samesecret",
+  "description": "Verify mutual knowledge privately. Check if someone knows the same secret without revealing it, with zero logs and secure ephemeral key handshakes.",
+  "requestFramePermissions": []
+}
