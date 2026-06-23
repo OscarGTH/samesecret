@@ -2,25 +2,34 @@ FROM node:18 AS builder
 
 WORKDIR /usr/src/app
 
-# Install dependencies (including dev deps for the build)
-COPY package.json package-lock.json ./
-RUN npm ci
+# Copy package files
+COPY package.json package-lock.json* ./
 
-# Copy source and build (Vite + bundle server via esbuild)
+# Clean install - delete any cached/local stuff and reinstall fresh
+RUN rm -rf node_modules package-lock.json && npm install
+
+# Copy source
 COPY . .
+
+# Build
 RUN npm run build
 
+
 FROM node:18-slim
+
 WORKDIR /app
 
-# Only runtime deps
-COPY package.json package-lock.json ./
-RUN npm ci --production=true
+# Copy package.json
+COPY package.json ./
 
-# Copy built artifacts from builder
+# Install production dependencies fresh
+RUN npm install --omit=dev
+
+# Copy built files
 COPY --from=builder /usr/src/app/dist ./dist
 
 EXPOSE 3000
+
 ENV NODE_ENV=production
 ENV PORT=3000
 

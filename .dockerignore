@@ -1,10 +1,9 @@
 node_modules
+package-lock.json
 dist
+.git
+.gitignore
 .env
 .env.*
-coverage
-.git
 *.log
-tmp
-build
 .DS_Store
