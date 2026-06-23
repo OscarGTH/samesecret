@@ -1,11 +1,11 @@
-FROM node:18 AS builder
+FROM node:20 AS builder
 
 WORKDIR /usr/src/app
 
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Clean install - delete any cached/local stuff and reinstall fresh
+# Clean install fresh for Linux
 RUN rm -rf node_modules package-lock.json && npm install
 
 # Copy source
@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build
 
 
-FROM node:18-slim
+FROM node:20-slim
 
 WORKDIR /app
 
