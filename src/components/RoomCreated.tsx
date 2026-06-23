@@ -30,6 +30,7 @@ interface RoomCreatedProps {
 
 export default function RoomCreated({ roomId, accessCode, question, template, onMatchFinished, onHome }: RoomCreatedProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
   const [pollingError, setPollingError] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   
@@ -43,6 +44,14 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
     navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyKey = () => {
+    if (savedKey) {
+      navigator.clipboard.writeText(savedKey);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
+    }
   };
 
   // Generate real QR code
@@ -233,21 +242,41 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
             </div>
           </div>
 
-          {/* Backup Alphanumeric code */}
-          <div className="flex items-center justify-between p-4 bg-[#D4AF37]/5 rounded-sm border border-[#D4AF37]/20">
-            <div className="flex flex-col text-left">
-              <span className="font-sans text-[9px] font-bold text-white/40 uppercase tracking-widest">
-                Backup Code
-              </span>
-              <span className="font-mono text-xl font-bold tracking-widest text-[#D4AF37] uppercase">
-                {accessCode}
-              </span>
+          {/* Code + Key row */}
+          <div className="flex gap-2">
+            {/* Access code */}
+            <div className="flex-1 flex items-center justify-between p-3 bg-[#D4AF37]/5 rounded-sm border border-[#D4AF37]/20">
+              <div className="flex flex-col text-left">
+                <span className="font-sans text-[9px] font-bold text-white/40 uppercase tracking-widest">Code</span>
+                <span className="font-mono text-xl font-bold tracking-widest text-[#D4AF37] uppercase">{accessCode}</span>
+              </div>
+              <div className="flex gap-1 items-center">
+                <div className="w-2 h-2 rounded-full bg-[#D4AF37] animate-pulse"></div>
+                <div className="w-2 h-2 rounded-full bg-[#D4AF37] animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              </div>
             </div>
-            
-            <div className="flex gap-1.5 items-center">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#D4AF37] animate-pulse"></div>
-              <div className="w-2.5 h-2.5 rounded-full bg-[#D4AF37] animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-            </div>
+
+            {/* Decryption key (share separately if needed) */}
+            {savedKey && (
+              <div className="flex flex-col justify-between p-3 bg-white/[0.02] rounded-sm border border-white/10 text-left min-w-0">
+                <span className="font-sans text-[9px] font-bold text-white/30 uppercase tracking-widest mb-1">Decryption Key</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-white/30 truncate">
+                    {savedKey.slice(0, 8)}…{savedKey.slice(-4)}
+                  </span>
+                  <button
+                    onClick={copyKey}
+                    title="Copy full key — share this separately if you sent the code by other means"
+                    className={`shrink-0 flex items-center justify-center w-7 h-7 rounded-sm active:scale-95 transition-all cursor-pointer ${
+                      copiedKey ? 'bg-green-500/20 text-green-400' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/70'
+                    }`}
+                  >
+                    {copiedKey ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <span className="font-sans text-[8px] text-white/20 mt-1 leading-tight">Share separately if sending code by text</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
