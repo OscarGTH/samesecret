@@ -6,6 +6,7 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import cors from 'cors';
 
 interface DBConfig {
   id: string;
@@ -50,6 +51,8 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+  // Enable CORS for the frontend origin (set APP_URL to your Netlify site)
+  app.use(cors({ origin: process.env.APP_URL || '*' }));
 
   // Clean obsolete rooms (after 24 hours) every 15 minutes
   setInterval(() => {
