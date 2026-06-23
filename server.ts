@@ -51,8 +51,14 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
-  // Enable CORS for the frontend origin (set APP_URL to your Netlify site)
-  app.use(cors({ origin: process.env.APP_URL || '*' }));
+  // Enable CORS. Allow multiple origins via ALLOWED_ORIGINS (comma-separated),
+  // otherwise fall back to APP_URL or allow all in development.
+  const allowedRaw = process.env.ALLOWED_ORIGINS || process.env.APP_URL || '';
+  const allowedOrigins = allowedRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const corsOptions = allowedOrigins.length > 0
+    ? { origin: (origin: string | undefined) => !origin || allowedOrigins.includes(origin) }
+    : { origin: true };
+  app.use(cors(corsOptions));
 
   // Clean obsolete rooms (after 24 hours) every 15 minutes
   setInterval(() => {
