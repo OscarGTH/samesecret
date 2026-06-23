@@ -9,7 +9,7 @@
 [[redirects]]
   # Proxy API calls from the frontend to your backend service
   from = "/api/*"
-  to = "https://api.samesecret.xyz/:splat"
+  to = "https://api.samesecret.xyz/api/:splat"
   status = 200
   force = true
 
