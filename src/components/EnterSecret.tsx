@@ -18,6 +18,7 @@ import {
 import { RoomState } from '../types';
 import { normalizeSecret, sha256, decryptAES, encryptAES, generateNickname } from '../utils/crypto';
 import { generatePrivateExponent, hashToGroupElement, modPow, P } from '../utils/smp';
+import { api } from '../lib/api';
 import { Loader2 } from 'lucide-react';
 
 interface EnterSecretProps {
@@ -178,7 +179,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
     let active = true;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/rooms/${room.id}/status`);
+        const res = await fetch(api(`/api/rooms/${room.id}/status`));
         if (!res.ok) {
           throw new Error('Lost connection to pairing session');
         }
@@ -264,7 +265,6 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
       
       // Compute Bob's parts under Socialist Millionaire Protocol
       const H_B = await hashToGroupElement(finalNormalizedVal);
-      import { api } from '../lib/api';
       const privateKeyB = generatePrivateExponent();
       const B = modPow(H_B, privateKeyB, P);
 
@@ -273,10 +273,9 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
         throw new Error('Symmetric context is missing. Handshake is impossible.');
       }
       const creatorA = BigInt(room.creatorSmpA);
-          const interval = setInterval(async () => {
-            try {
-              const res = await fetch(api(`/api/rooms/${room.id}/status`));
-      const res = await fetch(`/api/rooms/${room.id}/join`, {
+      const C_B = modPow(creatorA, privateKeyB, P);
+
+      const res = await fetch(api(`/api/rooms/${room.id}/join`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -372,7 +371,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
               </div>
             </div>
 
-            const res = await fetch(api(`/api/rooms/${room.id}/join`), {
+            <p className="font-sans text-xs text-white/60 leading-relaxed">
               Please wait while the room creator's browser retrieves the secure payload and carries out the final cryptographic validation.
             </p>
           </div>
