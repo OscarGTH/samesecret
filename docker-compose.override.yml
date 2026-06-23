@@ -3,4 +3,4 @@ services:
   samesecret:
     # Bind container port to localhost only so nginx on the host can proxy to it
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3002:3000"
