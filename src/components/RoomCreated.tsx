@@ -77,8 +77,9 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
         }
         
         const data = await res.json();
-        
+
         if (!active) return;
+        setPollingError(false);
 
         if (data.status === 'joiner_submitted' && !isFinalizing) {
           isFinalizing = true;
