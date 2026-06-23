@@ -3,7 +3,7 @@
 @theme {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
-  --font-heading: "Playfair Display", serif;
+  --font-heading: "Lora", serif;
 }
 
 @layer utilities {

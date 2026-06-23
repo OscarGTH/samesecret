@@ -189,7 +189,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-[#f6fafb] flex-col font-sans select-none overflow-x-hidden pt-14">
+    <div className="min-h-screen flex flex-[#f6fafb] flex-col font-sans overflow-x-hidden pt-14">
       {/* Top Navigation bar */}
       <Navbar onNavigate={handleNavigate} currentView={view} />
 

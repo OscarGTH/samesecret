@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Plus, ScanLine, EyeOff, Fingerprint, Lock, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Plus, ScanLine, EyeOff, Fingerprint, Lock, CheckCircle2, Hash, User, Calendar, Mail } from 'lucide-react';
 
 interface HeroSectionProps {
   onAction: (view: 'create' | 'join') => void;
@@ -125,6 +125,65 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
         </div>
       </div>
 
+      {/* Example questions */}
+      <div className="py-2 md:py-4 text-left">
+        <h3 className="font-heading italic text-white text-xl mb-1">
+          What people compare
+        </h3>
+        <p className="text-sm text-white/40 mb-4">
+          Both answers stay secret unless they match. Only then does either party find out.
+        </p>
+
+        {/* Template type strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+          {[
+            { type: 'Number', desc: 'Exact values',         icon: <Hash className="w-4 h-4" /> },
+            { type: 'Name',   desc: 'People & suspects',    icon: <User className="w-4 h-4" /> },
+            { type: 'Date',   desc: 'Timing & planning',    icon: <Calendar className="w-4 h-4" /> },
+            { type: 'Email',  desc: 'Contacts & addresses', icon: <Mail className="w-4 h-4" /> },
+          ].map(({ type, desc, icon }) => (
+            <div key={type} className="flex items-center gap-2.5 px-3 py-2.5 bg-[#D4AF37]/5 border border-[#D4AF37]/15 rounded-sm">
+              <span className="text-[#D4AF37] shrink-0">{icon}</span>
+              <div>
+                <div className="font-mono text-xs font-bold text-[#D4AF37] uppercase tracking-wider">{type}</div>
+                <div className="text-xs text-white/35 leading-tight">{desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[
+            { category: 'Salary',  template: 'Number', question: 'What\'s your salary?',                          note: 'Find out if you\'re in the same pay band without either person anchoring first' },
+            { category: 'Source',  template: 'Name',   question: 'Who\'s your source for this story?',            note: 'Verify you\'re both protecting the same whistleblower before comparing notes' },
+            { category: 'Gossip',  template: 'Name',   question: 'Who do you think is quitting next?',            note: 'Compare predictions without planting ideas if you\'re the only one who thinks so' },
+            { category: 'Timing',  template: 'Date',   question: 'When are you planning to resign?',              note: 'Check if you\'re leaving together without tipping your hand if you\'re not' },
+            { category: 'Leak',    template: 'Name',   question: 'Who do you think leaked the document?',         note: 'Name a suspect only if you\'re both already thinking the same person' },
+            { category: 'Contact', template: 'Email',  question: 'What\'s your lawyer\'s email?',                 note: 'Verify you share the same counsel before your calls cross' },
+          ].map(({ category, template, question, note }) => (
+            <div
+              key={question}
+              className="glass-card rounded-sm p-4 border border-white/5 bg-[#0C0C0C]/40 flex flex-col gap-2 group hover:border-[#D4AF37]/20 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-widest text-[#D4AF37]/50">
+                  {category}
+                </span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#D4AF37]/30 border border-[#D4AF37]/15 px-1.5 py-0.5 rounded-sm">
+                  {template}
+                </span>
+              </div>
+              <p className="font-heading italic text-white/80 text-base leading-snug group-hover:text-white transition-colors">
+                "{question}"
+              </p>
+              <p className="text-xs text-white/25 leading-relaxed mt-auto pt-1 border-t border-white/5">
+                {note}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Feature Bento Grid */}
       <div className="py-4 md:py-8 text-left">
         <h3 className="font-heading italic text-white text-xl mb-4 md:mb-8 border-b border-white/5 pb-2">
@@ -140,7 +199,7 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
               </div>
               <h4 className="font-heading italic text-xl text-white mb-2">Zero-Knowledge Privacy</h4>
               <p className="font-sans text-xs text-white/50 leading-relaxed max-w-lg">
-                We use the Socialist Millionaire Protocol (SMP) to compare secrets cryptographically. Neither participant learns the other's secret unless they match. The server never sees any plaintext secrets—only encrypted data it cannot read.
+                We use the Socialist Millionaire Protocol (SMP) to compare secrets cryptographically. Neither participant learns the other's secret unless they match. The server never sees any plaintext secrets, only encrypted data it cannot read.
               </p>
             </div>
             <div className="mt-6 border-t border-white/5 pt-4">
