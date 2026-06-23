@@ -1,0 +1,20 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Set a default API URL for Netlify deploys (override in Netlify UI if needed)
+  VITE_API_URL = "https://api.samesecret.xyz"
+
+[[redirects]]
+  # Proxy API calls from the frontend to your backend service
+  from = "/api/*"
+  to = "https://api.samesecret.xyz/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  # SPA fallback for client-side routing
+  from = "/*"
+  to = "/index.html"
+  status = 200
