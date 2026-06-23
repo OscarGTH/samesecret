@@ -84,7 +84,8 @@ export default function JoinCheck({ onRoomSelected, onHome, initialCode = '' }: 
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/rooms/${fullCode}`);
+      const { api } = await import('../lib/api');
+      const res = await fetch(api(`/api/rooms/${fullCode}`));
       if (!res.ok) {
         throw new Error('Secret Room session not found, or it has expired.');
       }
@@ -104,7 +105,8 @@ export default function JoinCheck({ onRoomSelected, onHome, initialCode = '' }: 
     setCode(scannedCode.split(''));
     setLoading(true);
     try {
-      const res = await fetch(`/api/rooms/${scannedCode}`);
+      const { api } = await import('../lib/api');
+      const res = await fetch(api(`/api/rooms/${scannedCode}`));
       if (!res.ok) {
         throw new Error('Secret Room session not found, or it has expired.');
       }

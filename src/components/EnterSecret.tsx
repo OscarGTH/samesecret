@@ -264,6 +264,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
       
       // Compute Bob's parts under Socialist Millionaire Protocol
       const H_B = await hashToGroupElement(finalNormalizedVal);
+      import { api } from '../lib/api';
       const privateKeyB = generatePrivateExponent();
       const B = modPow(H_B, privateKeyB, P);
 
@@ -272,9 +273,9 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
         throw new Error('Symmetric context is missing. Handshake is impossible.');
       }
       const creatorA = BigInt(room.creatorSmpA);
-      const C_B = modPow(creatorA, privateKeyB, P);
-
-      // 2. Dispatch pairing attempt to server
+          const interval = setInterval(async () => {
+            try {
+              const res = await fetch(api(`/api/rooms/${room.id}/status`));
       const res = await fetch(`/api/rooms/${room.id}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -371,7 +372,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
               </div>
             </div>
 
-            <p className="font-sans text-[10px] text-white/30 italic">
+            const res = await fetch(api(`/api/rooms/${room.id}/join`), {
               Please wait while the room creator's browser retrieves the secure payload and carries out the final cryptographic validation.
             </p>
           </div>

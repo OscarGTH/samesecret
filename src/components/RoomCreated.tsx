@@ -17,6 +17,7 @@ import {
 import QRCode from 'qrcode';
 import { MatchTemplate } from '../types';
 import { modPow, P } from '../utils/smp';
+import { api } from '../lib/api';
 
 interface RoomCreatedProps {
   roomId: string;
@@ -70,7 +71,7 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
     let isFinalizing = false;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/rooms/${roomId}/status`);
+        const res = await fetch(api(`/api/rooms/${roomId}/status`));
         if (!res.ok) {
           throw new Error('Lost connection to Check Room');
         }
@@ -89,7 +90,7 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
               const C_A = modPow(B, a, P);
 
               // Dispatch the final CA to finalize the handshake!
-              const finalizeRes = await fetch(`/api/rooms/${roomId}/finalize`, {
+              const finalizeRes = await fetch(api(`/api/rooms/${roomId}/finalize`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ creatorSmpCA: C_A.toString() }),
@@ -144,7 +145,7 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
 
   const cancelRoom = async () => {
     try {
-      await fetch(`/api/rooms/${roomId}/cancel`, { method: 'POST' });
+      await fetch(api(`/api/rooms/${roomId}/cancel`), { method: 'POST' });
     } catch (e) {
       console.error(e);
     } finally {

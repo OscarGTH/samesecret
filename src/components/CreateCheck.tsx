@@ -23,6 +23,7 @@ import {
 import { MatchTemplate, RoomConfig } from '../types';
 import { normalizeSecret, sha256, encryptAES, generateNickname } from '../utils/crypto';
 import { generatePrivateExponent, hashToGroupElement, modPow, P } from '../utils/smp';
+import { api } from '../lib/api';
 
 interface CreateCheckProps {
   onRoomCreated: (roomId: string, accessCode: string, question: string, template: MatchTemplate, roomKeyHex?: string) => void;
@@ -119,7 +120,7 @@ export default function CreateCheck({ onRoomCreated }: CreateCheckProps) {
         selfDestruct,
       };
 
-      const res = await fetch('/api/rooms', {
+      const res = await fetch(api('/api/rooms'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

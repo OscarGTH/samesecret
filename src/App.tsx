@@ -81,7 +81,8 @@ export default function App() {
 
   const handleRejoinRoom = async (roomId: string, role: 'creator' | 'joiner') => {
     try {
-      const res = await fetch(`/api/rooms/${roomId}/status`);
+      const { api } = await import('./lib/api');
+      const res = await fetch(api(`/api/rooms/${roomId}/status`));
       if (!res.ok) {
         alert('This room has either expired, completed, or been cancelled on the server.');
         // Prune the expired room immediately from session storage
