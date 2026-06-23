@@ -67,6 +67,7 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
 
   // Status Polling Loop
   useEffect(() => {
+    if (!roomId) return;
     let active = true;
     let isFinalizing = false;
     const interval = setInterval(async () => {

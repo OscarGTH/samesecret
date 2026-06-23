@@ -200,7 +200,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
 
   // Poll for handshake outcome
   useEffect(() => {
-    if (!isWaitingForFinalize) return;
+    if (!isWaitingForFinalize || !room?.id) return;
 
     let active = true;
     const interval = setInterval(async () => {
