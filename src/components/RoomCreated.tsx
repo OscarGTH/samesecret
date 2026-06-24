@@ -7,16 +7,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle, 
   Copy, 
-  CheckSquare, 
-  Terminal, 
   Lock, 
-  Loader2, 
   AlertTriangle, 
-  ExternalLink 
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { MatchTemplate } from '../types';
-import { modPow, P } from '../utils/smp';
+import { smpStep3, verifySMP } from '../utils/smp';
+import { decryptAES } from '../utils/crypto';
 import { api } from '../lib/api';
 
 interface RoomCreatedProps {
@@ -89,68 +86,78 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
     const poll = async () => {
       try {
         const res = await fetch(api(`/api/rooms/${roomId}/status`));
-        if (!res.ok) {
-          if (res.status === 429) {
-            backoffMs = Math.min(backoffMs * 2, 20000);
-          }
-          throw new Error('Lost connection to Check Room');
-        }
-
-        if (!active) return;
-        backoffMs = 3000;
-        setPollingError(false);
-
+        if (!res.ok) throw new Error('connection lost');
+        
         const data = await res.json();
-
+        
         if (data.status === 'joiner_submitted' && !isFinalizing) {
           isFinalizing = true;
+          
           try {
-            const privateKeyAStr = sessionStorage.getItem(`smp_private_key_${roomId}`);
-            if (privateKeyAStr && data.joinerSmpB) {
-              const a = BigInt(privateKeyAStr);
-              const B = BigInt(data.joinerSmpB);
-              const C_A = modPow(B, a, P);
+            // Retrieve our private values
+            const roomData = JSON.parse(sessionStorage.getItem(`smp_room_${roomId}`) || '{}');
+            const a2 = BigInt(roomData.a2);
+            const a3 = BigInt(roomData.a3);
+            const secret = roomData.secret;
+            
+            // Get joiner's public values
+            const g2b = BigInt(data.joinerG2b);
+            const g3b = BigInt(data.joinerG3b);
+            const pb = BigInt(data.joinerPb);
+            const qb = BigInt(data.joinerQb);
+            
+            // SMP Step 3: Generate our response
+            const step3 = await smpStep3(secret, a2, a3, g2b, g3b, pb, qb);
+            
+            // Send to server
+            await fetch(api(`/api/rooms/${roomId}/respond`), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                creatorPa: step3.pa.toString(),
+                creatorQa: step3.qa.toString(),
+                creatorRa: step3.ra.toString(),
+              }),
+            });
 
-              const finalizeRes = await fetch(api(`/api/rooms/${roomId}/finalize`), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ creatorSmpCA: C_A.toString() }),
-              });
-              if (!finalizeRes.ok) {
-                console.error('Handshake finalization failure');
-              }
-            }
-          } catch (handshakeErr) {
-            console.error('Error in secure SMP handshake calculation:', handshakeErr);
+            // Store pa and pb for final verification
+            sessionStorage.setItem(`smp_verify_${roomId}`, JSON.stringify({
+              pa: step3.pa.toString(),
+              pb: pb.toString(),
+            }));
+            
+          } catch (err) {
+            console.error('SMP step 3 error:', err);
           } finally {
             isFinalizing = false;
           }
-        } else if (data.status === 'matched') {
-          let decryptedJoinerName = data.joinerName || 'Joiner';
-          const savedKey = sessionStorage.getItem(`smp_room_key_${roomId}`);
-          if (savedKey && decryptedJoinerName) {
-            try {
-              const hexRegex = /^[0-9a-fA-F]+$/;
-              if (hexRegex.test(decryptedJoinerName) && decryptedJoinerName.length >= 24) {
+        } else if (data.status === 'completed') {
+          // Verify locally: rab * pa ≡ pb (mod P)
+          const verifyData = JSON.parse(sessionStorage.getItem(`smp_verify_${roomId}`) || '{}');
+          const pa  = BigInt(verifyData.pa  || '0');
+          const pb  = BigInt(verifyData.pb  || '0');
+          const rab = BigInt(data.joinerRb);
+
+          const isMatch = verifySMP(rab, pa, pb);
+          
+          // Decrypt joiner name if match
+          let joinerName = data.joinerName || 'Joiner';
+          if (isMatch) {
+            const savedKey = sessionStorage.getItem(`smp_room_key_${roomId}`);
+            if (savedKey) {
+              try {
                 const keyBytes = new Uint8Array(savedKey.length / 2);
                 for (let i = 0; i < keyBytes.length; i++) {
                   keyBytes[i] = parseInt(savedKey.substring(i * 2, i * 2 + 2), 16);
                 }
-                const { decryptAES } = await import('../utils/crypto');
-                decryptedJoinerName = await decryptAES(decryptedJoinerName, keyBytes);
-              }
-            } catch (errDecrypt) {
-              console.error('Failed to decrypt joinerName on match:', errDecrypt);
+                joinerName = await decryptAES(joinerName, keyBytes);
+              } catch {}
             }
           }
-          return onMatchFinished('matched', decryptedJoinerName);
-        } else if (data.status === 'no_match') {
-          return onMatchFinished('no_match');
-        } else if (data.status === 'cancelled') {
-          return onMatchFinished('cancelled');
+          
+          return onMatchFinished(isMatch ? 'matched' : 'no_match', joinerName);
         }
       } catch (err) {
-        console.error('Polling error:', err);
         setPollingError(true);
       }
       scheduleNext();

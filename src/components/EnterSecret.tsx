@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { RoomState } from '../types';
 import { normalizeSecret, decryptAES, encryptAES, generateNickname } from '../utils/crypto';
-import { generatePrivateExponent, hashToGroupElement, modPow, P } from '../utils/smp';
+import { smpStep2, smpStep4, verifySMP } from '../utils/smp';
 import { api } from '../lib/api';
 
 interface EnterSecretProps {
@@ -136,32 +136,46 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
     const poll = async () => {
       try {
         const res = await fetch(api(`/api/rooms/${room.id}/status`));
-        if (!res.ok) {
-          if (res.status === 429) backoffMs = Math.min(backoffMs * 2, 20000);
-          throw new Error('connection lost');
-        }
-        if (!active) return;
-        backoffMs = 3000;
         const data = await res.json();
+        
+        if (data.status === 'creator_verified') {
+          // Creator has responded - compute our final proof
+          const joinerData = JSON.parse(sessionStorage.getItem(`smp_joiner_${room.id}`) || '{}');
+          const b3 = BigInt(joinerData.b3);
+          const pb = BigInt(joinerData.pb);
 
-        if (data.status === 'matched') {
-          let creatorName = data.creatorName || room.creatorName || 'Creator';
-          const savedKey = sessionStorage.getItem(`smp_room_key_${room.id}`);
-          if (savedKey) {
-            try {
-              const hexRegex = /^[0-9a-fA-F]+$/;
-              if (hexRegex.test(creatorName) && creatorName.length >= 24) {
+          const pa = BigInt(data.creatorPa);
+          const ra = BigInt(data.creatorRa);
+
+          // SMP Step 4: compute Ra^b3
+          const rab = smpStep4(b3, ra);
+
+          // Verify locally: rab * pa ≡ pb (mod P)
+          const isMatch = verifySMP(rab, pa, pb);
+
+          // Send rab to server so creator can also verify
+          await fetch(api(`/api/rooms/${room.id}/complete`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ joinerRb: rab.toString() }),
+          });
+          
+          // Decrypt creator name if match
+          let creatorName = data.creatorName || 'Creator';
+          if (isMatch) {
+            const savedKey = sessionStorage.getItem(`smp_room_key_${room.id}`);
+            if (savedKey) {
+              try {
                 const kb = new Uint8Array(savedKey.length / 2);
-                for (let i = 0; i < kb.length; i++) kb[i] = parseInt(savedKey.substring(i * 2, i * 2 + 2), 16);
+                for (let i = 0; i < kb.length; i++) {
+                  kb[i] = parseInt(savedKey.substring(i * 2, i * 2 + 2), 16);
+                }
                 creatorName = await decryptAES(creatorName, kb);
-              }
-            } catch {}
+              } catch {}
+            }
           }
-          return onJoinComplete('matched', creatorName);
-        } else if (data.status === 'no_match') {
-          return onJoinComplete('no_match');
-        } else if (data.status === 'cancelled') {
-          return onJoinComplete('cancelled');
+          
+          return onJoinComplete(isMatch ? 'matched' : 'no_match', creatorName);
         }
       } catch {}
       scheduleNext();
@@ -185,45 +199,86 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
     if (room.template === 'Email' && !emailValid) { setErrorMsg('Please enter a valid email address.'); return; }
 
     setLoading(true);
+    
     try {
+      const roomRes = await fetch(api(`/api/rooms/${room.id}`));
+      if (!roomRes.ok) throw new Error('Failed to fetch room data');
+      
+      const roomData = await roomRes.json();
+      
+      if (!roomData.creatorG2a || !roomData.creatorG3a) {
+        throw new Error('Room missing required SMP values');
+      }
+      
       const finalNormalized = normalizeSecret(secretVal, room.template, room.caseSensitive, room.ignoreWhitespace);
-      const keyHex = sessionStorage.getItem(`smp_room_key_${room.id}`) || sessionStorage.getItem('smp_current_url_key') || '';
-
+      
+      // Get creator's public values from fetched data
+      const g2a = BigInt(roomData.creatorG2a);
+      const g3a = BigInt(roomData.creatorG3a);
+      
+      // SMP Step 2: Generate our values and proofs
+      const step2 = await smpStep2(finalNormalized, g2a, g3a);
+      
+      // Encrypt name
+      const keyHex = sessionStorage.getItem(`smp_room_key_${room.id}`) || 
+                    sessionStorage.getItem('smp_current_url_key') || '';
+      
       let encryptedName = joinerName.trim();
       if (keyHex) {
         try {
           const kb = new Uint8Array(keyHex.length / 2);
-          for (let i = 0; i < kb.length; i++) kb[i] = parseInt(keyHex.substring(i * 2, i * 2 + 2), 16);
+          for (let i = 0; i < kb.length; i++) {
+            kb[i] = parseInt(keyHex.substring(i * 2, i * 2 + 2), 16);
+          }
           encryptedName = await encryptAES(joinerName.trim() || 'Joiner', kb);
         } catch {}
       }
-
-      if (!room.creatorSmpA) throw new Error('Missing creator key — handshake impossible.');
-      const H_B = await hashToGroupElement(finalNormalized);
-      const privateKeyB = generatePrivateExponent();
-      const B = modPow(H_B, privateKeyB, P);
-      const C_B = modPow(BigInt(room.creatorSmpA), privateKeyB, P);
-
+      
+      // Send public values to server
       const res = await fetch(api(`/api/rooms/${room.id}/join`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: encryptedName, joinerSmpB: B.toString(), joinerSmpCB: C_B.toString() }),
+        body: JSON.stringify({
+          name: encryptedName,
+          joinerG2b: step2.g2b.toString(),
+          joinerG3b: step2.g3b.toString(),
+          joinerPb: step2.pb.toString(),
+          joinerQb: step2.qb.toString(),
+        }),
       });
+      
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Server rejected the request.');
       }
-
+      
+      // Store private values for later verification
+      sessionStorage.setItem(`smp_joiner_${room.id}`, JSON.stringify({
+        b2: step2.b2.toString(),
+        b3: step2.b3.toString(),
+        pb: step2.pb.toString(),
+        secret: finalNormalized,
+      }));
+      
+      // Store active room info
       try {
         const activeRooms = JSON.parse(sessionStorage.getItem('secret_matcher_active_session_rooms') || '[]');
         if (!activeRooms.some((r: any) => r.roomId === room.id)) {
-          activeRooms.push({ roomId: room.id, accessCode: room.accessCode, question: decryptedQuestion || room.question, template: room.template, createdAt: Date.now(), role: 'joiner', joinerName: joinerName.trim() });
+          activeRooms.push({
+            roomId: room.id,
+            accessCode: room.accessCode,
+            question: decryptedQuestion || room.question,
+            template: room.template,
+            createdAt: Date.now(),
+            role: 'joiner',
+            joinerName: joinerName.trim()
+          });
           sessionStorage.setItem('secret_matcher_active_session_rooms', JSON.stringify(activeRooms));
         }
         sessionStorage.setItem(`smp_joiner_submitted_${room.id}`, 'true');
         sessionStorage.setItem(`smp_joiner_name_${room.id}`, joinerName.trim());
       } catch {}
-
+      
       setIsWaitingForFinalize(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'Something went wrong.');

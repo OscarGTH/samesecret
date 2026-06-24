@@ -16,21 +16,31 @@ export interface DBConfig {
   question: string;
   template: 'Person' | 'Project' | 'Date' | 'Email' | 'Number' | 'Custom';
   creatorName: string;
-  creatorSmpA: string; // Alice's public blinded key A
-  joinerSmpB?: string; // Bob's public blinded key B
-  joinerSmpCB?: string; // Bob's cross-blinded key CB
-  creatorSmpCA?: string; // Alice's cross-blinded key CA
+
+  // SMP Protocol Values (all PUBLIC, derived from private keys)
+  creatorG2a?: string;  // g^(a2)
+  creatorG3a?: string;  // g^(a3)
+  creatorPa?: string;   // Creator's proof Pa
+  creatorQa?: string;   // Creator's proof Qa
+  creatorRa?: string;   // Creator's final proof Ra
+
+  joinerG2b?: string;   // g^(b2)
+  joinerG3b?: string;   // g^(b3)
+  joinerPb?: string;    // Joiner's proof Pb
+  joinerQb?: string;    // Joiner's proof Qb
+  joinerRb?: string;    // Joiner's final proof Rb
+
   caseSensitive: boolean;
   ignoreWhitespace: boolean;
   selfDestruct: boolean;
   createdAt: number;
-  status: 'waiting' | 'joiner_submitted' | 'matched' | 'no_match' | 'cancelled';
+  status: 'waiting' | 'joiner_submitted' | 'creator_verified' | 'completed';
   joinerName?: string;
   templateConfig?: Record<string, any>;
 }
 
 function generateAccessCode(rooms: Map<string, DBConfig>): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No confusing 0, O, 1, I
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let attempt = 0; attempt < 100; attempt++) {
     code = '';
@@ -49,7 +59,6 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '16kb' }));
 
-  // CORS must be registered before the rate limiter so 429 responses still carry the header
   const allowedRaw = process.env.ALLOWED_ORIGINS || process.env.APP_URL || '';
   const allowedOrigins = allowedRaw.split(',').map(s => s.trim()).filter(Boolean);
   const corsOptions = allowedOrigins.length > 0
@@ -65,17 +74,29 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
   });
   app.use('/api/', apiLimiter);
 
-  // 1. Create a secure Room
+  // 1. Create Room (Creator sends Step 1 public values)
   app.post('/api/rooms', (req, res) => {
     try {
-      const { question, template, creatorName, creatorSmpA, caseSensitive, ignoreWhitespace, selfDestruct, templateConfig } = req.body;
+      const {
+        question,
+        template,
+        creatorName,
+        creatorG2a,
+        creatorG3a,
+        caseSensitive,
+        ignoreWhitespace,
+        selfDestruct,
+        templateConfig,
+      } = req.body;
 
-      if (!question || !creatorName || !creatorSmpA) {
+      if (!question || !creatorName || !creatorG2a || !creatorG3a) {
         res.status(400).json({ error: 'Missing required creation fields.' });
         return;
       }
-      if (typeof creatorSmpA !== 'string' || creatorSmpA.length > 512) {
-        res.status(400).json({ error: 'Invalid SMP key.' });
+
+      if (typeof creatorG2a !== 'string' || creatorG2a.length > 512 ||
+          typeof creatorG3a !== 'string' || creatorG3a.length > 512) {
+        res.status(400).json({ error: 'Invalid SMP values.' });
         return;
       }
 
@@ -88,7 +109,8 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
         question: question.trim(),
         template: template || 'Custom',
         creatorName: creatorName.trim(),
-        creatorSmpA,
+        creatorG2a,
+        creatorG3a,
         caseSensitive: !!caseSensitive,
         ignoreWhitespace: !!ignoreWhitespace,
         selfDestruct: !!selfDestruct,
@@ -104,7 +126,7 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
     }
   });
 
-  // 2. Fetch secure Room info
+  // 2. Fetch Room Info
   app.get('/api/rooms/:idOrCode', (req, res) => {
     try {
       const param = req.params.idOrCode.toUpperCase();
@@ -129,8 +151,10 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
         status: room.status,
         creatorName: room.creatorName,
         joinerName: room.joinerName,
-        creatorSmpA: room.creatorSmpA,
-        joinerSmpB: room.joinerSmpB,
+        creatorG2a: room.creatorG2a,
+        creatorG3a: room.creatorG3a,
+        joinerG2b: room.joinerG2b,
+        joinerG3b: room.joinerG3b,
         templateConfig: room.templateConfig,
       });
     } catch (err: any) {
@@ -138,19 +162,22 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
     }
   });
 
-  // 3. Participate / Submit Joiner SMP (Step 2)
+  // 3. Joiner Submits Step 2 Values
   app.post('/api/rooms/:idOrCode/join', (req, res) => {
     try {
       const param = req.params.idOrCode.toUpperCase();
-      const { name, joinerSmpB, joinerSmpCB } = req.body;
+      const { name, joinerG2b, joinerG3b, joinerPb, joinerQb } = req.body;
 
-      if (!name || !joinerSmpB || !joinerSmpCB) {
-        res.status(400).json({ error: 'Name, public blinded value (B), and cross-blinded value (CB) are mandatory.' });
+      if (!name || !joinerG2b || !joinerG3b || !joinerPb || !joinerQb) {
+        res.status(400).json({ error: 'Missing required joiner SMP values.' });
         return;
       }
-      if (typeof joinerSmpB !== 'string' || joinerSmpB.length > 512 ||
-          typeof joinerSmpCB !== 'string' || joinerSmpCB.length > 512) {
-        res.status(400).json({ error: 'Invalid SMP key.' });
+
+      if (typeof joinerG2b !== 'string' || joinerG2b.length > 512 ||
+          typeof joinerG3b !== 'string' || joinerG3b.length > 512 ||
+          typeof joinerPb !== 'string' || joinerPb.length > 512 ||
+          typeof joinerQb !== 'string' || joinerQb.length > 512) {
+        res.status(400).json({ error: 'Invalid SMP values.' });
         return;
       }
 
@@ -165,14 +192,16 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
       }
 
       if (room.status !== 'waiting') {
-        res.status(400).json({ error: `This Check Room has already ended or is processing. Status: ${room.status}` });
+        res.status(400).json({ error: `This Check Room has already ended. Status: ${room.status}` });
         return;
       }
 
       room.status = 'joiner_submitted';
       room.joinerName = name.trim();
-      room.joinerSmpB = joinerSmpB;
-      room.joinerSmpCB = joinerSmpCB;
+      room.joinerG2b = joinerG2b;
+      room.joinerG3b = joinerG3b;
+      room.joinerPb = joinerPb;
+      room.joinerQb = joinerQb;
 
       res.json({ success: true, status: room.status });
     } catch (err: any) {
@@ -180,10 +209,10 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
     }
   });
 
-  // 4. Finalize SMP match verification (Called by Creator with CA)
-  app.post('/api/rooms/:roomId/finalize', (req, res) => {
+  // 4. Creator Submits Step 3 Values (Pa, Qa, Ra)
+  app.post('/api/rooms/:roomId/respond', (req, res) => {
     try {
-      const { creatorSmpCA } = req.body;
+      const { creatorPa, creatorQa, creatorRa } = req.body;
       const room = rooms.get(req.params.roomId);
 
       if (!room) {
@@ -192,41 +221,62 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
       }
 
       if (room.status !== 'joiner_submitted') {
-        res.status(400).json({ error: `Room is not in joiner_submitted state. Status: ${room.status}` });
+        res.status(400).json({ error: `Room not ready for creator response. Status: ${room.status}` });
         return;
       }
 
-      if (!creatorSmpCA) {
-        res.status(400).json({ error: 'creatorSmpCA is mandatory for finalization.' });
-        return;
-      }
-      if (typeof creatorSmpCA !== 'string' || creatorSmpCA.length > 512) {
-        res.status(400).json({ error: 'Invalid SMP key.' });
+      if (!creatorPa || !creatorQa || !creatorRa) {
+        res.status(400).json({ error: 'Missing creator SMP response values.' });
         return;
       }
 
-      room.creatorSmpCA = creatorSmpCA;
+      room.creatorPa = creatorPa;
+      room.creatorQa = creatorQa;
+      room.creatorRa = creatorRa;
+      room.status = 'creator_verified';
 
-      // CA = B^a = (H_B^b)^a = H_B^(ab); CB = A^b = (H_A^a)^b = H_A^(ab)
-      // They are equal iff H_A === H_B, i.e. secrets match.
-      const isMatch = room.joinerSmpCB === creatorSmpCA;
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
-      room.status = isMatch ? 'matched' : 'no_match';
+  // 5. Joiner Submits Step 4 Value (Rb) and marks completed
+  app.post('/api/rooms/:roomId/complete', (req, res) => {
+    try {
+      const { joinerRb } = req.body;
+      const room = rooms.get(req.params.roomId);
 
-      res.json({ success: true, match: isMatch });
+      if (!room) {
+        res.status(404).json({ error: 'Secret Check Room not found or has expired.' });
+        return;
+      }
+
+      if (room.status !== 'creator_verified') {
+        res.status(400).json({ error: `Room not ready for completion. Status: ${room.status}` });
+        return;
+      }
+
+      if (!joinerRb) {
+        res.status(400).json({ error: 'Missing joiner final proof.' });
+        return;
+      }
+
+      room.joinerRb = joinerRb;
+      room.status = 'completed';
+
+      res.json({ success: true });
 
       if (room.selfDestruct) {
         const roomId = room.id;
-        setTimeout(() => {
-          rooms.delete(roomId);
-        }, 10000);
+        setTimeout(() => rooms.delete(roomId), 10000);
       }
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  // 5. Poll active room status
+  // 6. Poll Status (returns all public values for client-side verification)
   app.get('/api/rooms/:roomId/status', (req, res) => {
     try {
       const room = rooms.get(req.params.roomId);
@@ -239,19 +289,27 @@ export function createApp(rooms: Map<string, DBConfig> = new Map()) {
         status: room.status,
         creatorName: room.creatorName,
         joinerName: room.joinerName,
-        joinerSmpB: room.joinerSmpB,
+        creatorG2a: room.creatorG2a,
+        creatorG3a: room.creatorG3a,
+        creatorPa: room.creatorPa,
+        creatorQa: room.creatorQa,
+        creatorRa: room.creatorRa,
+        joinerG2b: room.joinerG2b,
+        joinerG3b: room.joinerG3b,
+        joinerPb: room.joinerPb,
+        joinerQb: room.joinerQb,
+        joinerRb: room.joinerRb,
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  // 6. Explicitly sever / cancel a Room
+  // 7. Cancel Room
   app.post('/api/rooms/:roomId/cancel', (req, res) => {
     try {
       const room = rooms.get(req.params.roomId);
       if (room) {
-        room.status = 'cancelled';
         rooms.delete(req.params.roomId);
       }
       res.json({ success: true });
@@ -268,7 +326,6 @@ async function startServer() {
   const app = createApp(rooms);
   const PORT = 3000;
 
-  // Clean obsolete rooms (after 24 hours) every 15 minutes
   setInterval(() => {
     const now = Date.now();
     const expiry = 24 * 60 * 60 * 1000;

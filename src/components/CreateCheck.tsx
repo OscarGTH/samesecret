@@ -23,8 +23,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { MatchTemplate, RoomConfig } from '../types';
-import { normalizeSecret, sha256, encryptAES, generateNickname } from '../utils/crypto';
-import { generatePrivateExponent, hashToGroupElement, modPow, P } from '../utils/smp';
+import { normalizeSecret, encryptAES, generateNickname } from '../utils/crypto';
+import { smpStep1 } from '../utils/smp';
 import { api } from '../lib/api';
 
 interface CreateCheckProps {
@@ -166,22 +166,22 @@ export default function CreateCheck({ onRoomCreated }: CreateCheckProps) {
     setIsSubmitting(true);
 
     try {
-      // Generate a 32-byte random key for client-side encryption of the question
+      // Generate room key for encrypting question
       const roomKeyBytes = window.crypto.getRandomValues(new Uint8Array(32));
       const roomKeyHex = Array.from(roomKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-
-      // Encrypt the question client-side before transport
+      
       const encryptedQuestion = await encryptAES(question.trim(), roomKeyBytes);
-
-      // Encrypt the creator name client-side before transport
       const encryptedCreatorName = await encryptAES(creatorName.trim() || 'Creator', roomKeyBytes);
-
-      // 1. Core client-side SMP generation before transport!
+      
+      // SMP Step 1: Generate initial public values
       const finalNormalizedVal = normalizeSecret(finalSecret, template, caseSensitive, ignoreWhitespace);
-      const H_A = await hashToGroupElement(finalNormalizedVal);
-      const privateKeyA = generatePrivateExponent();
-      const creatorSmpA = modPow(H_A, privateKeyA, P);
-
+      const step1 = smpStep1();
+      
+      // Store private values locally (NEVER send to server)
+      sessionStorage.setItem(`smp_a2_${Date.now()}`, step1.a2.toString());
+      sessionStorage.setItem(`smp_a3_${Date.now()}`, step1.a3.toString());
+      sessionStorage.setItem(`smp_secret_${Date.now()}`, finalNormalizedVal);
+      
       // 2. Prepare template configuration
       const templateConfig: any = {};
       if (template === 'Person') {
@@ -192,53 +192,39 @@ export default function CreateCheck({ onRoomCreated }: CreateCheckProps) {
         };
       }
 
-      // 3. Dispatch to server (sending encryptedQuestion and encryptedCreatorName)
       const payload = {
         question: encryptedQuestion,
         template,
         creatorName: encryptedCreatorName,
-        creatorSmpA: creatorSmpA.toString(),
-        templateConfig, // NEW: Send template configuration
+        creatorG2a: step1.g2a.toString(),  // PUBLIC value
+        creatorG3a: step1.g3a.toString(),  // PUBLIC value
+        templateConfig,
         caseSensitive,
         ignoreWhitespace,
         selfDestruct,
       };
-
+      
       const res = await fetch(api('/api/rooms'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
+      
       if (!res.ok) {
         const errObj = await res.json();
         throw new Error(errObj.error || 'Failed to create room');
       }
-
+      
       const data = await res.json();
-
-      // Store the private key in sessionStorage for later finalization
-      sessionStorage.setItem(`smp_private_key_${data.id}`, privateKeyA.toString());
-
-      // Store room key for decryption
+      
+      // Store metadata
       sessionStorage.setItem(`smp_room_key_${data.id}`, roomKeyHex);
-
-      // Store in active session list
-      try {
-        const activeRooms = JSON.parse(sessionStorage.getItem('secret_matcher_active_session_rooms') || '[]');
-        activeRooms.push({
-          roomId: data.id,
-          accessCode: data.accessCode,
-          question: question.trim(),
-          role: 'creator',
-          template,
-          createdAt: Date.now()
-        });
-        sessionStorage.setItem('secret_matcher_active_session_rooms', JSON.stringify(activeRooms));
-      } catch (e) {
-        console.error('Failed to store active room:', e);
-      }
-
+      sessionStorage.setItem(`smp_room_${data.id}`, JSON.stringify({
+        a2: step1.a2.toString(),
+        a3: step1.a3.toString(),
+        secret: finalNormalizedVal,
+      }));
+      
       onRoomCreated(data.id, data.accessCode, question.trim(), template, roomKeyHex);
     } catch (err: any) {
       setErrorMsg(err.message || 'An unexpected error occurred.');

@@ -29,14 +29,16 @@ export interface RoomState {
   caseSensitive: boolean;
   ignoreWhitespace: boolean;
   selfDestruct: boolean;
-  status: 'waiting' | 'joiner_submitted' | 'matched' | 'no_match' | 'cancelled';
-  creatorName: string;
+  status: string;
+  creatorName?: string;
   joinerName?: string;
-  creatorSmpA?: string;
-  joinerSmpB?: string;
-  joinerSmpCB?: string;
-  creatorSmpCA?: string;
+  creatorG2a?: string;
+  creatorG3a?: string;
   templateConfig?: {
-    personFields?: PersonTemplateConfig;
+    personFields?: {
+      includeFirstName: boolean;
+      includeLastName: boolean;
+      formatHint?: string;
+    };
   };
 }

@@ -1,43 +1,76 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
-import { createApp, DBConfig } from './server';
-import { modPow, P } from './src/utils/smp';
+import { createApp } from './server';
+import { smpStep1, smpStep2, smpStep3 } from './src/utils/smp';
 
-// Simulate SMP values using small hardcoded exponents (fast, deterministic)
-function makeSmpValues(hA: bigint, a: bigint, hB: bigint, b: bigint) {
-  const A = modPow(hA, a, P);
-  const B = modPow(hB, b, P);
-  const C_A = modPow(B, a, P); // creator's finalize value
-  const C_B = modPow(A, b, P); // joiner's cross-blind value
-  return { A, B, C_A, C_B };
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+async function createRoom(app: ReturnType<typeof createApp>, overrides?: Record<string, any>) {
+  const step1 = smpStep1();
+  const res = await request(app).post('/api/rooms').send({
+    question: 'Secret question',
+    template: 'Custom',
+    creatorName: 'Alice',
+    creatorG2a: step1.g2a.toString(),
+    creatorG3a: step1.g3a.toString(),
+    caseSensitive: false,
+    ignoreWhitespace: true,
+    selfDestruct: false,
+    ...overrides,
+  });
+  return { step1, ...res.body, res };
 }
 
-const SAME_SECRET_H = 4n;   // H_A === H_B (secrets match)
-const DIFF_SECRET_H = 9n;   // H_B differs (secrets don't match)
-const PRIVATE_A = 7919n;
-const PRIVATE_B = 6271n;
+async function joinRoom(
+  app: ReturnType<typeof createApp>,
+  roomId: string,
+  step1: ReturnType<typeof smpStep1>,
+  secret = 'password',
+) {
+  const step2 = await smpStep2(secret, step1.g2a, step1.g3a);
+  const res = await request(app).post(`/api/rooms/${roomId}/join`).send({
+    name: 'Bob',
+    joinerG2b: step2.g2b.toString(),
+    joinerG3b: step2.g3b.toString(),
+    joinerPb:  step2.pb.toString(),
+    joinerQb:  step2.qb.toString(),
+  });
+  return { step2, ...res.body, res };
+}
+
+async function respondRoom(
+  app: ReturnType<typeof createApp>,
+  roomId: string,
+  step1: ReturnType<typeof smpStep1>,
+  step2: Awaited<ReturnType<typeof smpStep2>>,
+  secret = 'password',
+) {
+  const step3 = await smpStep3(
+    secret, step1.a2, step1.a3,
+    step2.g2b, step2.g3b, step2.pb, step2.qb,
+  );
+  const res = await request(app).post(`/api/rooms/${roomId}/respond`).send({
+    creatorPa: step3.pa.toString(),
+    creatorQa: step3.qa.toString(),
+    creatorRa: step3.ra.toString(),
+  });
+  return { step3, ...res.body, res };
+}
+
+// ── POST /api/rooms ───────────────────────────────────────────────────────────
 
 describe('POST /api/rooms', () => {
   let app: ReturnType<typeof createApp>;
   beforeEach(() => { app = createApp(); });
 
   it('creates a room and returns id, accessCode, question', async () => {
-    const { A } = makeSmpValues(SAME_SECRET_H, PRIVATE_A, SAME_SECRET_H, PRIVATE_B);
-    const res = await request(app).post('/api/rooms').send({
-      question: 'Who do you think should lead the project?',
-      template: 'Custom',
-      creatorName: 'Alice',
-      creatorSmpA: A.toString(),
-      caseSensitive: false,
-      ignoreWhitespace: true,
-      selfDestruct: false,
-    });
+    const { res } = await createRoom(app, { question: 'Who leads the project?' });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(typeof res.body.id).toBe('string');
     expect(res.body.id).toBeTruthy();
     expect(res.body.accessCode).toMatch(/^[A-Z2-9]{6}$/);
-    expect(res.body.question).toBe('Who do you think should lead the project?');
+    expect(res.body.question).toBe('Who leads the project?');
   });
 
   it('returns 400 when required fields are missing', async () => {
@@ -47,37 +80,27 @@ describe('POST /api/rooms', () => {
   });
 });
 
+// ── GET /api/rooms/:idOrCode ──────────────────────────────────────────────────
+
 describe('GET /api/rooms/:idOrCode', () => {
   let app: ReturnType<typeof createApp>;
   beforeEach(() => { app = createApp(); });
 
-  async function createRoom(a: ReturnType<typeof createApp>) {
-    const { A } = makeSmpValues(SAME_SECRET_H, PRIVATE_A, SAME_SECRET_H, PRIVATE_B);
-    const res = await request(a).post('/api/rooms').send({
-      question: 'Secret Q',
-      template: 'Custom',
-      creatorName: 'Alice',
-      creatorSmpA: A.toString(),
-      caseSensitive: false,
-      ignoreWhitespace: true,
-      selfDestruct: false,
-    });
-    return res.body;
-  }
-
-  it('fetches room by ID', async () => {
-    const created = await createRoom(app);
-    const res = await request(app).get(`/api/rooms/${created.id}`);
+  it('fetches room by ID and exposes g2a/g3a for joiner', async () => {
+    const { id, step1 } = await createRoom(app);
+    const res = await request(app).get(`/api/rooms/${id}`);
     expect(res.status).toBe(200);
-    expect(res.body.id).toBe(created.id);
+    expect(res.body.id).toBe(id);
     expect(res.body.status).toBe('waiting');
+    expect(res.body.creatorG2a).toBe(step1.g2a.toString());
+    expect(res.body.creatorG3a).toBe(step1.g3a.toString());
   });
 
   it('fetches room by access code', async () => {
-    const created = await createRoom(app);
-    const res = await request(app).get(`/api/rooms/${created.accessCode}`);
+    const { id, accessCode } = await createRoom(app);
+    const res = await request(app).get(`/api/rooms/${accessCode}`);
     expect(res.status).toBe(200);
-    expect(res.body.id).toBe(created.id);
+    expect(res.body.id).toBe(id);
   });
 
   it('returns 404 for unknown room', async () => {
@@ -86,32 +109,20 @@ describe('GET /api/rooms/:idOrCode', () => {
   });
 });
 
+// ── POST /api/rooms/:id/join ──────────────────────────────────────────────────
+
 describe('POST /api/rooms/:id/join', () => {
   let app: ReturnType<typeof createApp>;
   let roomId: string;
-  let smp: ReturnType<typeof makeSmpValues>;
+  let step1: ReturnType<typeof smpStep1>;
 
   beforeEach(async () => {
     app = createApp();
-    smp = makeSmpValues(SAME_SECRET_H, PRIVATE_A, SAME_SECRET_H, PRIVATE_B);
-    const res = await request(app).post('/api/rooms').send({
-      question: 'Test Q',
-      template: 'Custom',
-      creatorName: 'Alice',
-      creatorSmpA: smp.A.toString(),
-      caseSensitive: false,
-      ignoreWhitespace: true,
-      selfDestruct: false,
-    });
-    roomId = res.body.id;
+    ({ id: roomId, step1 } = await createRoom(app));
   });
 
-  it('joiner can submit B and CB, status becomes joiner_submitted', async () => {
-    const res = await request(app).post(`/api/rooms/${roomId}/join`).send({
-      name: 'Bob',
-      joinerSmpB: smp.B.toString(),
-      joinerSmpCB: smp.C_B.toString(),
-    });
+  it('joiner submits Step 2 values, status becomes joiner_submitted', async () => {
+    const { res } = await joinRoom(app, roomId, step1);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('joiner_submitted');
   });
@@ -122,121 +133,156 @@ describe('POST /api/rooms/:id/join', () => {
   });
 
   it('returns 400 when joining a room that already has a joiner', async () => {
-    await request(app).post(`/api/rooms/${roomId}/join`).send({
-      name: 'Bob',
-      joinerSmpB: smp.B.toString(),
-      joinerSmpCB: smp.C_B.toString(),
-    });
-    const res = await request(app).post(`/api/rooms/${roomId}/join`).send({
-      name: 'Charlie',
-      joinerSmpB: smp.B.toString(),
-      joinerSmpCB: smp.C_B.toString(),
-    });
+    await joinRoom(app, roomId, step1);
+    const { res } = await joinRoom(app, roomId, step1);
     expect(res.status).toBe(400);
   });
 });
 
-describe('Full SMP flow: match', () => {
-  it('both parties share the same secret → finalize returns match=true, status=matched', async () => {
-    const app = createApp();
-    const smp = makeSmpValues(SAME_SECRET_H, PRIVATE_A, SAME_SECRET_H, PRIVATE_B);
+// ── POST /api/rooms/:id/respond ───────────────────────────────────────────────
 
-    // 1. Creator creates room
-    const createRes = await request(app).post('/api/rooms').send({
-      question: 'Shared secret question',
-      template: 'Custom',
-      creatorName: 'Alice',
-      creatorSmpA: smp.A.toString(),
-      caseSensitive: false,
-      ignoreWhitespace: true,
-      selfDestruct: false,
-    });
-    expect(createRes.status).toBe(200);
-    const { id } = createRes.body;
+describe('POST /api/rooms/:id/respond', () => {
+  let app: ReturnType<typeof createApp>;
+  let roomId: string;
+  let step1: ReturnType<typeof smpStep1>;
+  let step2: Awaited<ReturnType<typeof smpStep2>>;
 
-    // 2. Joiner submits their values
-    const joinRes = await request(app).post(`/api/rooms/${id}/join`).send({
-      name: 'Bob',
-      joinerSmpB: smp.B.toString(),
-      joinerSmpCB: smp.C_B.toString(),
-    });
-    expect(joinRes.status).toBe(200);
-    expect(joinRes.body.status).toBe('joiner_submitted');
+  beforeEach(async () => {
+    app = createApp();
+    ({ id: roomId, step1 } = await createRoom(app));
+    ({ step2 } = await joinRoom(app, roomId, step1));
+  });
 
-    // 3. Creator polls status and retrieves B
-    const statusRes = await request(app).get(`/api/rooms/${id}/status`);
-    expect(statusRes.status).toBe(200);
-    expect(statusRes.body.status).toBe('joiner_submitted');
-    expect(statusRes.body.joinerSmpB).toBe(smp.B.toString());
+  it('creator submits Step 3 values, status becomes creator_verified', async () => {
+    const { res } = await respondRoom(app, roomId, step1, step2);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
 
-    // 4. Creator finalizes with C_A
-    const finalizeRes = await request(app).post(`/api/rooms/${id}/finalize`).send({
-      creatorSmpCA: smp.C_A.toString(),
-    });
-    expect(finalizeRes.status).toBe(200);
-    expect(finalizeRes.body.match).toBe(true);
+    const statusRes = await request(app).get(`/api/rooms/${roomId}/status`);
+    expect(statusRes.body.status).toBe('creator_verified');
+  });
 
-    // 5. Status endpoint reflects matched
-    const finalStatus = await request(app).get(`/api/rooms/${id}/status`);
-    expect(finalStatus.body.status).toBe('matched');
+  it('returns 400 if room is not in joiner_submitted state', async () => {
+    await respondRoom(app, roomId, step1, step2);
+    // Second respond attempt should fail
+    const { res } = await respondRoom(app, roomId, step1, step2);
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when required respond fields are missing', async () => {
+    const res = await request(app).post(`/api/rooms/${roomId}/respond`).send({ creatorPa: '123' });
+    expect(res.status).toBe(400);
   });
 });
 
-describe('Full SMP flow: no match', () => {
-  it('parties have different secrets → finalize returns match=false, status=no_match', async () => {
-    const app = createApp();
-    // Alice uses SAME_SECRET_H, Bob uses DIFF_SECRET_H → C_A ≠ C_B
-    const smpAlice = makeSmpValues(SAME_SECRET_H, PRIVATE_A, SAME_SECRET_H, PRIVATE_B);
-    const smpBob = makeSmpValues(DIFF_SECRET_H, PRIVATE_B, SAME_SECRET_H, PRIVATE_A);
+// ── POST /api/rooms/:id/complete ──────────────────────────────────────────────
 
-    const createRes = await request(app).post('/api/rooms').send({
-      question: 'Mismatch question',
-      template: 'Custom',
-      creatorName: 'Alice',
-      creatorSmpA: smpAlice.A.toString(),
-      caseSensitive: false,
-      ignoreWhitespace: true,
-      selfDestruct: false,
+describe('POST /api/rooms/:id/complete', () => {
+  let app: ReturnType<typeof createApp>;
+  let roomId: string;
+  let step1: ReturnType<typeof smpStep1>;
+  let step2: Awaited<ReturnType<typeof smpStep2>>;
+  let step3: Awaited<ReturnType<typeof smpStep3>>;
+
+  beforeEach(async () => {
+    app = createApp();
+    ({ id: roomId, step1 } = await createRoom(app));
+    ({ step2 } = await joinRoom(app, roomId, step1));
+    ({ step3 } = await respondRoom(app, roomId, step1, step2));
+  });
+
+  it('joiner submits Rb, status becomes completed', async () => {
+    const res = await request(app).post(`/api/rooms/${roomId}/complete`).send({
+      joinerRb: step3.ra.toString(), // value doesn't matter — server just stores it
     });
-    const { id } = createRes.body;
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
 
-    // Bob joins with C_B derived from a DIFFERENT secret hash
-    const bobB = modPow(DIFF_SECRET_H, PRIVATE_B, P);
-    const bobC_B = modPow(smpAlice.A, PRIVATE_B, P); // Bob blinds Alice's A with his key...
-    // ...but Alice's C_A = B^a = (H_B_bob^b)^a ≠ A^b when H_A ≠ H_B
-    const aliceC_A = modPow(bobB, PRIVATE_A, P);
+    const statusRes = await request(app).get(`/api/rooms/${roomId}/status`);
+    expect(statusRes.body.status).toBe('completed');
+  });
 
-    await request(app).post(`/api/rooms/${id}/join`).send({
-      name: 'Bob',
-      joinerSmpB: bobB.toString(),
-      joinerSmpCB: bobC_B.toString(),
-    });
+  it('returns 400 when joinerRb is missing', async () => {
+    const res = await request(app).post(`/api/rooms/${roomId}/complete`).send({});
+    expect(res.status).toBe(400);
+  });
 
-    const finalizeRes = await request(app).post(`/api/rooms/${id}/finalize`).send({
-      creatorSmpCA: aliceC_A.toString(),
-    });
-    expect(finalizeRes.status).toBe(200);
-    expect(finalizeRes.body.match).toBe(false);
-
-    const statusRes = await request(app).get(`/api/rooms/${id}/status`);
-    expect(statusRes.body.status).toBe('no_match');
+  it('returns 400 if room is not in creator_verified state', async () => {
+    await request(app).post(`/api/rooms/${roomId}/complete`).send({ joinerRb: '1' });
+    const res = await request(app).post(`/api/rooms/${roomId}/complete`).send({ joinerRb: '1' });
+    expect(res.status).toBe(400);
   });
 });
+
+// ── GET /api/rooms/:id/status ─────────────────────────────────────────────────
+
+describe('GET /api/rooms/:id/status', () => {
+  it('exposes joiner Step 2 values after join', async () => {
+    const app = createApp();
+    const { id, step1 } = await createRoom(app);
+    const { step2 } = await joinRoom(app, id, step1);
+
+    const res = await request(app).get(`/api/rooms/${id}/status`);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('joiner_submitted');
+    expect(res.body.joinerG2b).toBe(step2.g2b.toString());
+    expect(res.body.joinerG3b).toBe(step2.g3b.toString());
+    expect(res.body.joinerPb).toBe(step2.pb.toString());
+    expect(res.body.joinerQb).toBe(step2.qb.toString());
+  });
+
+  it('exposes creator Step 3 values after respond', async () => {
+    const app = createApp();
+    const { id, step1 } = await createRoom(app);
+    const { step2 } = await joinRoom(app, id, step1);
+    const { step3 } = await respondRoom(app, id, step1, step2);
+
+    const res = await request(app).get(`/api/rooms/${id}/status`);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('creator_verified');
+    expect(res.body.creatorPa).toBe(step3.pa.toString());
+    expect(res.body.creatorQa).toBe(step3.qa.toString());
+    expect(res.body.creatorRa).toBe(step3.ra.toString());
+  });
+
+  it('returns 404 for unknown room', async () => {
+    const app = createApp();
+    const res = await request(app).get('/api/rooms/doesnotexist/status');
+    expect(res.status).toBe(404);
+  });
+});
+
+// ── Full 4-step flow ──────────────────────────────────────────────────────────
+
+describe('Full SMP flow', () => {
+  it('state machine advances correctly through all 4 steps', async () => {
+    const app = createApp();
+
+    // Step 1 – create
+    const { id, step1 } = await createRoom(app);
+    expect((await request(app).get(`/api/rooms/${id}/status`)).body.status).toBe('waiting');
+
+    // Step 2 – join
+    const { step2 } = await joinRoom(app, id, step1);
+    expect((await request(app).get(`/api/rooms/${id}/status`)).body.status).toBe('joiner_submitted');
+
+    // Step 3 – respond
+    await respondRoom(app, id, step1, step2);
+    expect((await request(app).get(`/api/rooms/${id}/status`)).body.status).toBe('creator_verified');
+
+    // Step 4 – complete
+    const completeRes = await request(app).post(`/api/rooms/${id}/complete`).send({ joinerRb: '1' });
+    expect(completeRes.status).toBe(200);
+    expect((await request(app).get(`/api/rooms/${id}/status`)).body.status).toBe('completed');
+  });
+});
+
+// ── POST /api/rooms/:id/cancel ────────────────────────────────────────────────
 
 describe('POST /api/rooms/:id/cancel', () => {
   it('cancels a room and subsequent status returns 404', async () => {
     const app = createApp();
-    const { A } = makeSmpValues(SAME_SECRET_H, PRIVATE_A, SAME_SECRET_H, PRIVATE_B);
-    const createRes = await request(app).post('/api/rooms').send({
-      question: 'To be cancelled',
-      template: 'Custom',
-      creatorName: 'Alice',
-      creatorSmpA: A.toString(),
-      caseSensitive: false,
-      ignoreWhitespace: false,
-      selfDestruct: false,
-    });
-    const { id } = createRes.body;
+    const { id } = await createRoom(app);
 
     const cancelRes = await request(app).post(`/api/rooms/${id}/cancel`);
     expect(cancelRes.status).toBe(200);

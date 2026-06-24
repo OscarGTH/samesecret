@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modPow, P, Q } from './smp';
+import { modPow, P, Q, smpStep1, smpStep2, smpStep3, smpStep4, verifySMP } from './smp';
 
 describe('modPow', () => {
   it('computes basic examples correctly', () => {
@@ -72,5 +72,24 @@ describe('SMP protocol math', () => {
     const b = 6271n;
     const { C_A, C_B } = simulateSmp(hA, a, hB, b, P);
     expect(C_A).not.toBe(C_B);
+  });
+});
+
+describe('Full 4-step SMP: smpStep1→4 + verifySMP', () => {
+  it('verifySMP returns true for matching secrets', async () => {
+    const secret = 'correct horse battery staple';
+    const step1 = smpStep1();
+    const step2 = await smpStep2(secret, step1.g2a, step1.g3a);
+    const step3 = await smpStep3(secret, step1.a2, step1.a3, step2.g2b, step2.g3b, step2.pb, step2.qb);
+    const rab   = smpStep4(step2.b3, step3.ra);
+    expect(verifySMP(rab, step3.pa, step2.pb)).toBe(true);
+  });
+
+  it('verifySMP returns false for different secrets', async () => {
+    const step1 = smpStep1();
+    const step2 = await smpStep2('wrong answer', step1.g2a, step1.g3a);
+    const step3 = await smpStep3('right answer', step1.a2, step1.a3, step2.g2b, step2.g3b, step2.pb, step2.qb);
+    const rab   = smpStep4(step2.b3, step3.ra);
+    expect(verifySMP(rab, step3.pa, step2.pb)).toBe(false);
   });
 });
