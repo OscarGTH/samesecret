@@ -40,7 +40,7 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
         <div className="lg:col-span-7 flex flex-col gap-6 text-left">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 rounded-sm w-fit">
             <ShieldCheck className="w-4 h-4" />
-            <span className="font-sans text-[10px] uppercase tracking-widest font-bold">Zero-Knowledge Protocols Enabled</span>
+            <span className="font-sans text-xs uppercase tracking-widest font-bold">Zero-Knowledge Protocols Enabled</span>
           </div>
 
           <h2 className="font-heading italic text-white text-3xl md:text-5xl leading-tight">
@@ -81,7 +81,7 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
                     className="flex items-center justify-between p-2 bg-black/40 border border-white/10 rounded-sm hover:border-[#D4AF37]/30 transition-all"
                   >
                     <div className="flex flex-col min-w-0 pr-4">
-                      <span className="font-mono text-[9px] text-[#D4AF37] uppercase tracking-wider font-bold">
+                      <span className="font-mono text-[11px] text-[#D4AF37] uppercase tracking-wider font-bold">
                         Room {room.accessCode} • {room.role === 'creator' ? 'Created' : 'Joined'}
                       </span>
                       <span className="font-heading italic text-white text-xs truncate max-w-[200px] block">
@@ -90,7 +90,7 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
                     </div>
                     <button
                       onClick={() => onRejoinRoom(room.roomId, room.role)}
-                      className="px-3 py-1 bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 hover:bg-[#D4AF37] hover:text-black rounded-sm text-[10px] uppercase tracking-wider font-bold active:scale-95 transition-all cursor-pointer shrink-0"
+                      className="px-3 py-1 bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 hover:bg-[#D4AF37] hover:text-black rounded-sm text-xs uppercase tracking-wider font-bold active:scale-95 transition-all cursor-pointer shrink-0"
                     >
                       Open
                     </button>
@@ -114,7 +114,7 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
                 <div className="h-0.5 w-24 bg-[#D4AF37] rounded-full mb-3 opacity-30"></div>
                 <div className="px-5 py-1.5 rounded-sm bg-[#D4AF37]/5 border border-[#D4AF37]/20 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-[#D4AF37]" />
-                  <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#D4AF37]">Encrypted Match</span>
+                  <span className="font-sans text-xs uppercase tracking-widest font-bold text-[#D4AF37]">Encrypted Match</span>
                 </div>
               </div>
             </div>
@@ -169,7 +169,7 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
                 <span className="text-xs font-bold uppercase tracking-widest text-[#D4AF37]/50">
                   {category}
                 </span>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#D4AF37]/30 border border-[#D4AF37]/15 px-1.5 py-0.5 rounded-sm">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#D4AF37]/30 border border-[#D4AF37]/15 px-1.5 py-0.5 rounded-sm">
                   {template}
                 </span>
               </div>
@@ -204,7 +204,7 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
             </div>
             <div className="mt-6 border-t border-white/5 pt-4">
               <span className="text-[11px] text-[#D4AF37] font-semibold uppercase tracking-wider block mb-1">Mathematically Proven Privacy</span>
-              <p className="text-[10px] text-white/40">Only the match status (yes/no) is revealed. Your secrets remain completely private.</p>
+              <p className="text-xs text-white/40">Only the match status (yes/no) is revealed. Your secrets remain completely private.</p>
             </div>
           </div>
 
@@ -223,7 +223,7 @@ export default function HeroSection({ onAction, onRejoinRoom }: HeroSectionProps
               <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                 <div className="w-full h-full bg-[#D4AF37]"></div>
               </div>
-              <span className="text-[10px] text-[#D4AF37] block mt-1.5 font-semibold">End-to-end encrypted</span>
+              <span className="text-xs text-[#D4AF37] block mt-1.5 font-semibold">End-to-end encrypted</span>
             </div>
           </div>
 

@@ -39,7 +39,7 @@ export default function Footer({ onNavigate }: FooterProps) {
           </a>
         </div>
 
-        <p className="text-[11px] text-white/30 font-sans">
+        <p className="text-xs text-white/30 font-sans">
           &copy; {new Date().getFullYear()} Discreet Labs. Secure client-side cryptography.
         </p>
       </div>

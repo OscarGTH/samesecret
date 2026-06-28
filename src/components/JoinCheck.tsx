@@ -106,7 +106,7 @@ export default function JoinCheck({ onRoomSelected, onHome, initialCode = '' }: 
         )}
 
         <div className="mb-6 space-y-3">
-          <label className="block text-[9px] font-bold text-white/40 uppercase tracking-widest text-center">
+          <label className="block text-[11px] font-bold text-white/40 uppercase tracking-widest text-center">
             Access Code
           </label>
           <div className="flex justify-between gap-1 sm:gap-2 max-w-sm mx-auto" onPaste={handlePaste}>

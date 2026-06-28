@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type MatchTemplate = 'Person' | 'Project' | 'Date' | 'Email' | 'Number' | 'Custom';
+export type MatchTemplate = 'Person' | 'Date' | 'Email' | 'Number' | 'MultipleChoice' | 'Custom';
 
 export interface RoomConfig {
   question: string;
@@ -19,6 +19,10 @@ export interface PersonTemplateConfig {
   includeFirstName: boolean;
   includeLastName: boolean;
   formatHint: string;
+}
+
+export interface MultipleChoiceConfig {
+  options: string[];
 }
 
 export interface RoomState {
@@ -40,5 +44,7 @@ export interface RoomState {
       includeLastName: boolean;
       formatHint?: string;
     };
+    multipleChoiceOptions?: string;
+    multipleChoiceOptionCount?: number;
   };
 }

@@ -27,6 +27,11 @@ export default function App() {
   const [activeRoomState, setActiveRoomState] = useState<RoomState | null>(null);
   const [matchOutcome, setMatchOutcome] = useState<{ status: 'matched' | 'no_match' | 'cancelled'; partnerName?: string } | null>(null);
 
+  // Scroll to top on every view change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [view]);
+
   // Monitor URL parameters for immediate "Pair Check Link" redirects!
   useEffect(() => {
     // Process and keep client-side hash secret room verification keys safely in sessionStorage
@@ -167,10 +172,9 @@ export default function App() {
           status: data.status,
           creatorName: decryptedCreatorName,
           joinerName: decryptedJoinerName,
-          creatorSmpA: data.creatorSmpA,
-          joinerSmpB: data.joinerSmpB,
-          joinerSmpCB: data.joinerSmpCB,
-          creatorSmpCA: data.creatorSmpCA,
+          creatorG2a: data.creatorG2a,
+          creatorG3a: data.creatorG3a,
+          templateConfig: data.templateConfig,
         };
         setActiveRoomState(roomState);
         setView('enter_secret');

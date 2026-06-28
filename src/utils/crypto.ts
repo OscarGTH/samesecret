@@ -30,6 +30,9 @@ export function normalizeSecret(
   } else if (template === 'Date') {
     // Normalize simple date separators
     val = val.replace(/[-\s]/g, '/').trim();
+  } else if (template === 'MultipleChoice') {
+    // Exact match from predefined options — just trim
+    val = val.trim();
   } else {
     // Custom / Default
     val = val.trim();

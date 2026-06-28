@@ -56,7 +56,7 @@ export default function MatchResult({ status, partnerName = 'Anonymous Matcher',
         {/* Matched target user bento card */}
         <div className="glass-card p-1 rounded-sm relative overflow-hidden border border-white/5 bg-[#0C0C0C]/50 transition-all duration-300 hover:shadow-2xl">
           <div className="bg-black/40 rounded-sm p-5 border border-white/5 flex flex-col items-center gap-3">
-            <span className="font-sans text-[9px] font-bold text-white/40 uppercase tracking-widest">
+            <span className="font-sans text-[11px] font-bold text-white/40 uppercase tracking-widest">
               Validated Identity
             </span>
             <div className="py-2.5 px-8 bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-sm flex items-center gap-2">
@@ -128,10 +128,10 @@ export default function MatchResult({ status, partnerName = 'Anonymous Matcher',
             <Lock className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-sans text-[9px] font-bold text-white/80 uppercase tracking-widest">
+            <h3 className="font-sans text-[11px] font-bold text-white/80 uppercase tracking-widest">
               Privacy Guaranteed
             </h3>
-            <span className="text-[9px] text-white/30 block font-bold tracking-wider uppercase">Session purge triggered</span>
+            <span className="text-[11px] text-white/30 block font-bold tracking-wider uppercase">Session purge triggered</span>
           </div>
         </div>
         <p className="font-sans text-xs text-white/40 leading-relaxed">

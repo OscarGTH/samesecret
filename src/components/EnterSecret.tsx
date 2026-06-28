@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Loader2,
   ChevronDown,
+  List,
 } from 'lucide-react';
 import { RoomState } from '../types';
 import { normalizeSecret, decryptAES, encryptAES, generateNickname } from '../utils/crypto';
@@ -48,6 +49,10 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
   const [isDecrypting, setIsDecrypting] = useState(true);
   const [showKeyReveal, setShowKeyReveal] = useState(false);
 
+  // Multiple choice state
+  const [decryptedOptions, setDecryptedOptions] = useState<string[] | null>(null);
+  const [multiChoiceSelected, setMultiChoiceSelected] = useState('');
+
   // Try to decrypt question on mount
   useEffect(() => {
     let active = true;
@@ -72,6 +77,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
         for (let i = 0; i < keyBytes.length; i++) keyBytes[i] = parseInt(keyHex.substring(i * 2, i * 2 + 2), 16);
         const cleartext = await decryptAES(room.question, keyBytes);
         sessionStorage.setItem(`smp_room_key_${room.id}`, keyHex);
+        await decryptMultipleChoiceOptions(keyBytes);
         if (active) { setDecryptedQuestion(cleartext); setDecryptionError(false); setIsDecrypting(false); }
       } catch {
         if (active) { setDecryptionError(true); setIsDecrypting(false); }
@@ -80,6 +86,24 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
     attemptDecryption();
     return () => { active = false; };
   }, [room.id, room.question]);
+
+  // Try to decrypt multiple choice options with the given key
+  async function decryptMultipleChoiceOptions(keyBytes: Uint8Array) {
+    if (room.template !== 'MultipleChoice' || !room.templateConfig?.multipleChoiceOptions) return;
+    try {
+      const hexRegex = /^[0-9a-fA-F]+$/;
+      const optsHex = room.templateConfig.multipleChoiceOptions;
+      if (hexRegex.test(optsHex) && optsHex.length >= 24) {
+        const json = await decryptAES(optsHex, keyBytes);
+        const parsed = JSON.parse(json);
+        if (Array.isArray(parsed)) {
+          setDecryptedOptions(parsed);
+          return;
+        }
+      }
+    } catch {}
+    setDecryptedOptions(null);
+  }
 
   const handleManualKeySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,6 +119,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
       for (let i = 0; i < 32; i++) keyBytes[i] = parseInt(keyHex.substring(i * 2, i * 2 + 2), 16);
       const cleartext = await decryptAES(room.question, keyBytes);
       sessionStorage.setItem(`smp_room_key_${room.id}`, keyHex);
+      await decryptMultipleChoiceOptions(keyBytes);
       setDecryptedQuestion(cleartext);
       setDecryptionError(false);
       setShowKeyReveal(false);
@@ -119,10 +144,12 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
   useEffect(() => {
     const val = room.template === 'Person'
       ? [showFirstName ? firstName : '', showLastName ? lastName : ''].filter(Boolean).join(' ')
+      : room.template === 'MultipleChoice'
+      ? multiChoiceSelected
       : secret;
     if (!val.trim()) { setNormalizedPreview(''); return; }
     setNormalizedPreview(normalizeSecret(val, room.template, room.caseSensitive, room.ignoreWhitespace));
-  }, [secret, firstName, lastName, room]);
+  }, [secret, firstName, lastName, multiChoiceSelected, room]);
 
   // Poll for finalize result with exponential backoff
   useEffect(() => {
@@ -174,6 +201,10 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
               } catch {}
             }
           }
+          // If name still looks like encrypted hex, show a safe fallback
+          if (/^[0-9a-fA-F]{24,}$/.test(creatorName)) {
+            creatorName = 'Encrypted';
+          }
           
           return onJoinComplete(isMatch ? 'matched' : 'no_match', creatorName);
         }
@@ -193,9 +224,18 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
 
     const secretVal = room.template === 'Person'
       ? [showFirstName ? firstName : '', showLastName ? lastName : ''].filter(Boolean).join(' ')
+      : room.template === 'MultipleChoice'
+      ? multiChoiceSelected
       : secret;
 
-    if (!secretVal.trim()) { setErrorMsg('Please enter your secret.'); return; }
+    if (!secretVal.trim()) {
+      if (room.template === 'MultipleChoice') {
+        setErrorMsg('Please select an option.');
+      } else {
+        setErrorMsg('Please enter your secret.');
+      }
+      return;
+    }
     if (room.template === 'Email' && !emailValid) { setErrorMsg('Please enter a valid email address.'); return; }
 
     setLoading(true);
@@ -323,7 +363,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
           <div className="px-6 py-5 border-l-4 border-l-white/10">
             <div className="flex items-center gap-2 mb-1">
               <Lock className="w-3.5 h-3.5 text-white/20 shrink-0" />
-              <p className="text-[10px] font-bold text-white/25 uppercase tracking-widest">Question encrypted</p>
+              <p className="text-xs font-bold text-white/25 uppercase tracking-widest">Question encrypted</p>
             </div>
             <p className="text-white/30 text-sm italic">
               Ask the creator to share the decryption key, or proceed if you already know what you're comparing.
@@ -331,7 +371,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
             <button
               type="button"
               onClick={() => setShowKeyReveal(v => !v)}
-              className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-[#D4AF37]/60 hover:text-[#D4AF37] uppercase tracking-wider transition-colors cursor-pointer"
+              className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-[#D4AF37]/60 hover:text-[#D4AF37] uppercase tracking-wider transition-colors cursor-pointer"
             >
               <KeyRound className="w-3 h-3" />
               Have a key? Reveal question
@@ -361,7 +401,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
         </div>
       ) : (
         <div className="glass-card rounded-sm px-6 py-5 border-l-4 border-l-[#D4AF37] border-white/5 bg-[#0C0C0C]/50">
-          <p className="text-[10px] font-bold text-[#D4AF37]/70 uppercase tracking-widest mb-2">Question</p>
+          <p className="text-xs font-bold text-[#D4AF37]/70 uppercase tracking-widest mb-2">Question</p>
           <p className="font-heading italic text-white text-xl md:text-2xl leading-snug">
             "{decryptedQuestion}"
           </p>
@@ -380,7 +420,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
         <div className="glass-card rounded-sm p-5 border border-white/5 bg-[#0C0C0C]/50 space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-white uppercase tracking-widest">Your Answer</p>
-            <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">{room.template}</span>
+            <span className="text-[11px] text-white/30 font-bold uppercase tracking-wider">{room.template}</span>
           </div>
 
           {/* Person template — no checkboxes, just show required fields */}
@@ -393,7 +433,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
               )}
               {showFirstName && (
                 <div>
-                  <label className="block text-[10px] text-white/40 mb-1.5 uppercase tracking-wider">First name</label>
+                  <label className="block text-xs text-white/40 mb-1.5 uppercase tracking-wider">First name</label>
                   <input
                     type="text"
                     value={firstName}
@@ -407,7 +447,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
               )}
               {showLastName && (
                 <div>
-                  <label className="block text-[10px] text-white/40 mb-1.5 uppercase tracking-wider">Last name</label>
+                  <label className="block text-xs text-white/40 mb-1.5 uppercase tracking-wider">Last name</label>
                   <input
                     type="text"
                     value={lastName}
@@ -470,7 +510,47 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
             />
           )}
 
-          {(room.template === 'Project' || room.template === 'Custom') && (
+          {room.template === 'MultipleChoice' && (
+            <div>
+              {decryptedOptions ? (
+                (() => {
+                  const useGrid = decryptedOptions.length <= 6;
+                  return (
+                    <div className={useGrid ? 'grid grid-cols-2 sm:grid-cols-3 gap-2' : 'space-y-1.5'}>
+                      {decryptedOptions.map((opt, idx) => (
+                        <label
+                          key={idx}
+                          className={`block p-3 rounded-sm border cursor-pointer transition-all text-center ${
+                            multiChoiceSelected === opt
+                              ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-[#D4AF37] shadow-[0_0_12px_rgba(212,175,55,0.15)]'
+                              : 'border-white/10 bg-white/[0.02] text-white/60 hover:border-white/30 hover:bg-white/[0.04]'
+                          } ${useGrid ? '' : 'flex items-center gap-3'} ${inputDisabled ? 'opacity-40 pointer-events-none' : ''}`}
+                        >
+                          <input
+                            type="radio"
+                            name="multiChoiceAnswer"
+                            checked={multiChoiceSelected === opt}
+                            onChange={() => setMultiChoiceSelected(opt)}
+                            disabled={inputDisabled}
+                            className={`${useGrid ? 'sr-only' : 'text-[#D4AF37] focus:ring-[#D4AF37] border-white/20 bg-black/40'}`}
+                          />
+                          <span className={`text-sm font-medium ${useGrid ? 'block py-1' : ''}`}>
+                            {opt}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })()
+              ) : (
+                <p className="text-xs text-white/40 italic">
+                  The answer options are encrypted. Ask the creator for the decryption key to reveal them.
+                </p>
+              )}
+            </div>
+          )}
+
+          {room.template === 'Custom' && (
             <input
               type="text"
               value={secret}
@@ -486,8 +566,8 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
           {normalizedPreview && (
             <div className="flex items-center gap-2 pt-1 border-t border-white/5">
               <Eye className="w-3.5 h-3.5 text-white/20 shrink-0" />
-              <span className="text-[10px] text-white/30 uppercase tracking-wider">Will compare as:</span>
-              <span className="font-mono text-[10px] text-[#D4AF37]/70 break-all">{normalizedPreview}</span>
+              <span className="text-xs text-white/30 uppercase tracking-wider">Will compare as:</span>
+              <span className="font-mono text-xs text-[#D4AF37]/70 break-all">{normalizedPreview}</span>
             </div>
           )}
         </div>
@@ -505,7 +585,7 @@ export default function EnterSecret({ room, onJoinComplete, onHome }: EnterSecre
         {/* Display name — demoted to bottom */}
         <div className="flex items-center gap-3 pt-1">
           <div className="flex-grow">
-            <label className="block text-[10px] text-white/30 uppercase tracking-widest mb-1.5">
+            <label className="block text-xs text-white/30 uppercase tracking-widest mb-1.5">
               Your display name <span className="normal-case text-white/20">(shown only on match)</span>
             </label>
             <div className="relative">

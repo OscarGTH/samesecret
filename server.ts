@@ -14,7 +14,7 @@ export interface DBConfig {
   id: string;
   accessCode: string;
   question: string;
-  template: 'Person' | 'Project' | 'Date' | 'Email' | 'Number' | 'Custom';
+  template: 'Person' | 'Date' | 'Email' | 'Number' | 'MultipleChoice' | 'Custom';
   creatorName: string;
 
   // SMP Protocol Values (all PUBLIC, derived from private keys)

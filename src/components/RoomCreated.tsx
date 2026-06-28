@@ -154,6 +154,10 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
               } catch {}
             }
           }
+          // If name still looks like encrypted hex, show a safe fallback
+          if (/^[0-9a-fA-F]{24,}$/.test(joinerName)) {
+            joinerName = 'Encrypted';
+          }
           
           return onMatchFinished(isMatch ? 'matched' : 'no_match', joinerName);
         }
@@ -231,7 +235,7 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
         {/* Links input copies */}
         <div className="w-full space-y-4">
           <div className="flex flex-col space-y-1 text-left">
-            <label className="font-sans text-[9px] font-bold text-white/40 uppercase tracking-widest pl-1">
+            <label className="font-sans text-[11px] font-bold text-white/40 uppercase tracking-widest pl-1">
               Invite Link
             </label>
             <div className="flex items-center gap-2 bg-black/40 border border-white/10 p-1 rounded-sm">
@@ -254,7 +258,7 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
             {/* Access code */}
             <div className="flex-1 flex items-center justify-between p-3 bg-[#D4AF37]/5 rounded-sm border border-[#D4AF37]/20">
               <div className="flex flex-col text-left">
-                <span className="font-sans text-[9px] font-bold text-white/40 uppercase tracking-widest">Code</span>
+                <span className="font-sans text-[11px] font-bold text-white/40 uppercase tracking-widest">Code</span>
                 <span className="font-mono text-xl font-bold tracking-widest text-[#D4AF37] uppercase">{accessCode}</span>
               </div>
               <div className="flex gap-1 items-center">
@@ -266,9 +270,9 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
             {/* Decryption key (share separately if needed) */}
             {savedKey && (
               <div className="flex flex-col justify-between p-3 bg-white/[0.02] rounded-sm border border-white/10 text-left min-w-0">
-                <span className="font-sans text-[9px] font-bold text-white/30 uppercase tracking-widest mb-1">Decryption Key</span>
+                <span className="font-sans text-[11px] font-bold text-white/30 uppercase tracking-widest mb-1">Decryption Key</span>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-white/30 truncate">
+                  <span className="font-mono text-xs text-white/30 truncate">
                     {savedKey.slice(0, 8)}…{savedKey.slice(-4)}
                   </span>
                   <button
@@ -281,7 +285,7 @@ export default function RoomCreated({ roomId, accessCode, question, template, on
                     {copiedKey ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
-                <span className="font-sans text-[8px] text-white/20 mt-1 leading-tight">Share separately if sending code by text</span>
+                <span className="font-sans text-[10px] text-white/20 mt-1 leading-tight">Share separately if sending code by text</span>
               </div>
             )}
           </div>
